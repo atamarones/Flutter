@@ -1,0 +1,60 @@
+name: flutter_urbango_logistics
+description: Urbango Logistics - Rider App
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  cupertino_icons: ^1.0.2
+  
+
+  # State Management
+  flutter_riverpod: ^3.0.3
+  # Riverpod core package (explicit to satisfy analyzer resolution)
+  riverpod: ^3.0.3
+  
+  # Supabase
+  supabase_flutter: ^2.5.6
+  
+  # Maps
+  mapbox_maps_flutter: ^2.12.0
+  # State notifier (required by some Riverpod usages)
+  state_notifier: ^1.0.0
+  #google_maps_flutter: ^2.6.0
+  
+  # Location
+  geolocator: ^14.0.2
+  permission_handler: ^12.0.1
+  
+  # Routing
+  go_router: ^17.0.0
+  
+  # UI
+  flutter_svg: ^2.0.10
+  google_fonts: ^6.2.1
+  
+  # Utils
+  intl: ^0.20.2
+  uuid: ^4.4.0
+  url_launcher: ^6.3.0
+  shared_preferences: ^2.2.3
+  http: ^1.5.0
+  workmanager: ^0.9.0+3
+  audioplayers: ^5.2.1
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  
+  assets:
+    - assets/images/
+    - assets/icons/
+    - assets/sounds/

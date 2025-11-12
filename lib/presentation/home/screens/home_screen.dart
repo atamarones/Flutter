@@ -5,7 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/supabase_service.dart';
-import '../../../core/services/background_service.dart';
+import '../../../core/services/foreground_tracking_service.dart';
 import '../../../domain/entities/rider.dart';
 import '../../../domain/entities/order.dart';
 import '../providers/rider_provider.dart';
@@ -33,7 +33,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _initializeSession() async {
     final session = SupabaseService.client.auth.currentSession;
     if (session != null) {
-      await BackgroundService.saveToken(session.accessToken);
+      await ForegroundTrackingService.saveToken(session.accessToken);
     }
   }
 

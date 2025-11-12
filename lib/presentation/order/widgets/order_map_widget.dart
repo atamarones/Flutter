@@ -102,7 +102,7 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
           ),
           iconImage: 'marker',
           iconSize: 1.5,
-          iconColor: const Color(0xFF0066FF).value, // Azul para el rider
+          iconColor: const Color(0xFF0066FF).toARGB32(), // Azul para el rider
         ),
       );
     }
@@ -118,7 +118,7 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
         ),
         iconImage: 'marker',
         iconSize: 1.5,
-        iconColor: const Color(0xFFFF5722).value, // Rojo/Naranja para pickup
+        iconColor: const Color(0xFFFF5722).toARGB32(), // Rojo/Naranja para pickup
       ),
     );
 
@@ -133,7 +133,7 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
         ),
         iconImage: 'marker',
         iconSize: 1.5,
-        iconColor: const Color(0xFF4CAF50).value, // Verde para delivery
+        iconColor: const Color(0xFF4CAF50).toARGB32(), // Verde para delivery
       ),
     );
   }

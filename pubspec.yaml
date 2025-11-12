@@ -26,10 +26,11 @@ dependencies:
   state_notifier: ^1.0.0
   #google_maps_flutter: ^2.6.0
   
-  # Location
+  # Location & Tracking
   geolocator: ^14.0.2
   permission_handler: ^12.0.1
   wakelock_plus: ^1.2.8
+  flutter_foreground_task: ^8.15.0
   
   # Routing
   go_router: ^17.0.0
@@ -44,7 +45,6 @@ dependencies:
   url_launcher: ^6.3.0
   shared_preferences: ^2.2.3
   http: ^1.5.0
-  workmanager: ^0.9.0+3
   audioplayers: ^5.2.1
 
 dev_dependencies:

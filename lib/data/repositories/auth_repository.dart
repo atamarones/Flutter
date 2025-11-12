@@ -1,6 +1,6 @@
 import 'package:supabase_flutter/supabase_flutter.dart';
 import '../../core/services/supabase_service.dart';
-import '../../core/services/background_service.dart';
+import '../../core/services/foreground_tracking_service.dart';
 
 class AuthRepository {
   final SupabaseClient _supabase = SupabaseService.client;
@@ -10,11 +10,11 @@ class AuthRepository {
       email: email,
       password: password,
     );
-    
+
     if (response.session != null) {
-      await BackgroundService.saveToken(response.session!.accessToken);
+      await ForegroundTrackingService.saveToken(response.session!.accessToken);
     }
-    
+
     return response;
   }
 
@@ -26,8 +26,8 @@ class AuthRepository {
   }
 
   Future<void> logout() async {
-    await BackgroundService.stopHeartbeat();
-    await BackgroundService.clearToken();
+    await ForegroundTrackingService.stop();
+    await ForegroundTrackingService.clearData();
     await _supabase.auth.signOut();
   }
 

@@ -278,7 +278,7 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
           ),
           iconImage: 'marker',
           iconSize: 1.5,
-          iconColor: Colors.red.value,
+          iconColor: Colors.red.toARGB32(),
         ),
       );
 

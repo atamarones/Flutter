@@ -65,7 +65,7 @@ class RiderRepository {
     if (session == null) throw Exception('No active session');
 
     debugPrint('[HEARTBEAT] Sending to edge function');
-    debugPrint('[HEARTBEAT] User: ${session.user?.id}');
+    debugPrint('[HEARTBEAT] User: ${session.user.id}');
 
     final response = await http.post(
       Uri.parse('${AppConstants.supabaseUrl}/functions/v1/rider-heartbeat'),

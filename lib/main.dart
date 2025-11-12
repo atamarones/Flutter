@@ -3,24 +3,28 @@ import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'core/services/supabase_service.dart';
-import 'core/services/background_service.dart';
+import 'core/services/foreground_tracking_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'routing/app_router.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
+
   await SystemChrome.setPreferredOrientations([
     DeviceOrientation.portraitUp,
     DeviceOrientation.portraitDown,
   ]);
-  
+
   // Inicializar Mapbox
   MapboxOptions.setAccessToken(AppConstants.mapboxAccessToken);
+
+  // Inicializar Supabase
   await SupabaseService.initialize();
-  await BackgroundService.initialize();
-  
+
+  // Inicializar Foreground Tracking Service
+  await ForegroundTrackingService.initialize();
+
   runApp(
     const ProviderScope(
       child: UrbangoRiderApp(),

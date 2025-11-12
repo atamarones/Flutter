@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter_urbango_logistics/presentation/order/widgets/order_assigned_dialog.dart';
+import '../../order/widgets/order_assigned_dialog.dart';
 import 'package:go_router/go_router.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
@@ -22,6 +22,8 @@ class HomeScreen extends ConsumerStatefulWidget {
 }
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
+  String? _lastShownOrderId;
+
   @override
   void initState() {
     super.initState();
@@ -32,7 +34,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final session = SupabaseService.client.auth.currentSession;
     if (session != null) {
       await BackgroundService.saveToken(session.accessToken);
-      debugPrint('[HOME] Token saved on init');
     }
   }
 
@@ -60,7 +61,10 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     ref.listen(activeOrderProvider, (previous, next) {
       if (next is AsyncData<Order?>) {
         final order = next.value;
-        if (order == null) return;
+        if (order == null) {
+          _lastShownOrderId = null;
+          return;
+        }
         
         final riderAsync = ref.read(riderStateProvider);
         if (riderAsync is! AsyncData<Rider?>) return;
@@ -69,8 +73,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         if (rider?.status != RiderStatus.online) return;
         if (order.status != OrderStatus.assigned) return;
         
-        final prevOrder = previous is AsyncData<Order?> ? previous.value : null;
-        if (prevOrder?.id == order.id) return;
+        // CRÍTICO: Solo mostrar si es un pedido nuevo
+        if (_lastShownOrderId == order.id) return;
+        _lastShownOrderId = order.id;
         
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (context.mounted) {
@@ -198,7 +203,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
     }
 
-    // El mapa ya incluye su propio overlay con la info
     return RiderMapWidget(rider: rider, activeOrder: activeOrder);
   }
 
@@ -208,7 +212,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     return Container(
       height: 60,
       decoration: BoxDecoration(
-        color: isOnline ?  AppColors.online : AppColors.offline,
+        color: isOnline ? AppColors.online : AppColors.offline,
         borderRadius: BorderRadius.circular(30),
       ),
       child: Material(
@@ -222,7 +226,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               children: [
                 Expanded(
                   child: Text(
-                    isOnline ? 'DESCONECTARME' : 'CONECTARME',
+                    isOnline ? 'CONECTADO' : 'DESCONECTADO',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 18,
@@ -275,25 +279,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                   backgroundColor: Colors.white,
                   child: Text(
                     rider?.fullName.substring(0, 1).toUpperCase() ?? 'R',
-                    style: const TextStyle(
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                    ),
+                    style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   rider?.fullName ?? 'Rider',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                  ),
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
                 ),
-                Text(
-                  rider?.email ?? '',
-                  style: const TextStyle(color: Colors.white70),
-                ),
+                Text(rider?.email ?? '', style: const TextStyle(color: Colors.white70)),
               ],
             ),
           ),
@@ -316,8 +310,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           const Spacer(),
           ListTile(
             leading: const Icon(Icons.logout, color: AppColors.error),
-            title: const Text('Cerrar Sesión', 
-                style: TextStyle(color: AppColors.error)),
+            title: const Text('Cerrar Sesión', style: TextStyle(color: AppColors.error)),
             onTap: () async {
               await ref.read(authRepositoryProvider).logout();
               if (context.mounted) context.go('/login');
@@ -334,11 +327,7 @@ class _StatCard extends StatelessWidget {
   final String label;
   final String value;
 
-  const _StatCard({
-    required this.icon,
-    required this.label,
-    required this.value,
-  });
+  const _StatCard({required this.icon, required this.label, required this.value});
 
   @override
   Widget build(BuildContext context) {
@@ -346,18 +335,8 @@ class _StatCard extends StatelessWidget {
       children: [
         Icon(icon, size: 32, color: AppColors.primary),
         const SizedBox(height: 8),
-        Text(
-          value,
-          style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-            fontWeight: FontWeight.bold,
-          ),
-        ),
-        Text(
-          label,
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-            color: AppColors.textSecondary,
-          ),
-        ),
+        Text(value, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold)),
+        Text(label, style: Theme.of(context).textTheme.bodySmall?.copyWith(color: AppColors.textSecondary)),
       ],
     );
   }

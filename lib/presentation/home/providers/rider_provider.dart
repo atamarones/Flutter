@@ -56,8 +56,13 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
       }
       return rider;
     } catch (e) {
-      debugPrint('Error loading rider: $e');
-      return null; // No lanzar error, retornar null
+      // Solo loguear errores que no sean de conexión
+      if (!e.toString().contains('SocketException') &&
+          !e.toString().contains('Failed host lookup')) {
+        debugPrint('Error loading rider: $e');
+      }
+      // Si hay error de red, mantener el estado actual del rider
+      return state.value;
     }
   }
 
@@ -76,13 +81,16 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
       }
     }
 
-    final newStatus = rider.status == RiderStatus.online 
-        ? RiderStatus.offline 
+    final newStatus = rider.status == RiderStatus.online
+        ? RiderStatus.offline
         : RiderStatus.online;
 
     try {
       await _riderRepository.updateStatus(rider.id, newStatus);
       state = AsyncValue.data(rider.copyWith(status: newStatus));
+
+      // Guardar estado del rider para servicios en background
+      await BackgroundService.saveRiderStatus(newStatus.toString().split('.').last);
 
       if (newStatus == RiderStatus.online) {
         // Guardar token actualizado antes de iniciar servicios
@@ -109,11 +117,14 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
   }
 
   void _startServices() {
+    debugPrint('🚀 INICIANDO SERVICIOS DE TRACKING 🚀');
+
     // Enviar primer heartbeat inmediatamente
     Future.delayed(const Duration(seconds: 2), () async {
       try {
         await _refreshAndSaveToken();
         await _riderRepository.sendHeartbeat();
+        debugPrint('✅ Primer heartbeat enviado');
       } catch (e) {
         debugPrint('Initial heartbeat error: $e');
       }
@@ -121,11 +132,13 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
 
     _locationService.startLocationUpdates((position) async {
       try {
+        debugPrint('📍 UBICACIÓN ACTUALIZADA: Lat ${position.latitude}, Lng ${position.longitude}');
+
         await _riderRepository.updateLocation(
           position.latitude,
           position.longitude,
         );
-        
+
         final rider = state.value;
         if (rider != null) {
           state = AsyncValue.data(rider.copyWith(
@@ -145,12 +158,13 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
         try {
           await _refreshAndSaveToken();
           await _riderRepository.sendHeartbeat();
+          debugPrint('💓 Heartbeat enviado');
         } catch (e) {
           debugPrint('Heartbeat error: $e');
         }
       },
     );
-    
+
     _refreshTimer?.cancel();
     _refreshTimer = Timer.periodic(
       const Duration(seconds: 10),
@@ -158,19 +172,28 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
         final updated = await _loadRider();
         if (updated != null) {
           state = AsyncValue.data(updated);
+          debugPrint('🔄 Datos del rider actualizados');
         }
       },
     );
 
-    // Comentado: Background heartbeat causa 401 con tokens expirados
-    // BackgroundService.startHeartbeat();
+    // Iniciar servicios de background para mantener ubicación activa
+    BackgroundService.startHeartbeat();
+    BackgroundService.startLocationTracking();
+    debugPrint('📡 Servicios de background iniciados (heartbeat + location tracking)');
   }
 
   void _stopServices() {
+    debugPrint('🛑 DETENIENDO SERVICIOS DE TRACKING 🛑');
+
     _locationService.stopLocationUpdates();
     _heartbeatTimer?.cancel();
     _refreshTimer?.cancel();
+
+    // Detener todos los servicios de background
     BackgroundService.stopHeartbeat();
+    BackgroundService.stopLocationTracking();
+    debugPrint('📡 Servicios de background detenidos');
   }
 }
 

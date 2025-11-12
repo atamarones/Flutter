@@ -34,9 +34,11 @@ class RiderRepository {
   Future<void> updateLocation(double lat, double lng) async {
     // Verificar y refrescar sesión
     await _ensureValidSession();
-    
+
     final session = _supabase.auth.currentSession;
     if (session == null) throw Exception('No active session');
+
+    debugPrint('[LOCATION UPDATE] Sending to edge function - Lat: $lat, Lng: $lng');
 
     final response = await http.post(
       Uri.parse('${AppConstants.supabaseUrl}/functions/v1/update-rider-location'),
@@ -48,6 +50,8 @@ class RiderRepository {
       body: jsonEncode({'lat': lat, 'lng': lng}),
     );
 
+    debugPrint('[LOCATION UPDATE] Response: ${response.statusCode} - ${response.body}');
+
     if (response.statusCode != 200) {
       throw Exception('Failed to update location: ${response.body}');
     }
@@ -56,12 +60,12 @@ class RiderRepository {
   Future<void> sendHeartbeat() async {
     // Verificar y refrescar sesión
     await _ensureValidSession();
-    
+
     final session = _supabase.auth.currentSession;
     if (session == null) throw Exception('No active session');
 
-    //print('[HEARTBEAT] Token: ${session.accessToken.substring(0, 30)}...');
-    //print('[HEARTBEAT] User: ${session.user?.id}');
+    debugPrint('[HEARTBEAT] Sending to edge function');
+    debugPrint('[HEARTBEAT] User: ${session.user?.id}');
 
     final response = await http.post(
       Uri.parse('${AppConstants.supabaseUrl}/functions/v1/rider-heartbeat'),
@@ -71,10 +75,10 @@ class RiderRepository {
         'Content-Type': 'application/json',
       },
     );
-    
-    //print('[HEARTBEAT] Status: ${response.statusCode}');
-    //print('[HEARTBEAT] Response: ${response.body}');
-    
+
+    debugPrint('[HEARTBEAT] Status: ${response.statusCode}');
+    debugPrint('[HEARTBEAT] Response: ${response.body}');
+
     if (response.statusCode != 200) {
       throw Exception('Heartbeat failed: ${response.statusCode} - ${response.body}');
     }

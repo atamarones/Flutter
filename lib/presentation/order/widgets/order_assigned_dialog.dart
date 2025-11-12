@@ -5,6 +5,8 @@ import 'package:audioplayers/audioplayers.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/order.dart';
 import '../providers/order_provider.dart';
+import '../../home/providers/rider_provider.dart';
+import 'order_map_widget.dart';
 
 class OrderAssignedDialog extends ConsumerStatefulWidget {
   final Order order;
@@ -56,6 +58,8 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final riderAsync = ref.watch(riderStateProvider);
+
     return Dialog(
       backgroundColor: Colors.transparent,
       insetPadding: EdgeInsets.zero,
@@ -65,12 +69,72 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
         color: Colors.white,
         child: Stack(
           children: [
-            // Mapa como fondo (simplificado por ahora)
-            Container(
+            // Mapa con los tres marcadores
+            SizedBox(
               height: MediaQuery.of(context).size.height * 0.4,
-              color: Colors.grey[300],
-              child: const Center(
-                child: Icon(Icons.map, size: 48, color: Colors.grey),
+              child: Stack(
+                children: [
+                  riderAsync.when(
+                    data: (rider) => OrderMapWidget(
+                      order: widget.order,
+                      riderLat: rider?.currentLat,
+                      riderLng: rider?.currentLng,
+                    ),
+                    loading: () => OrderMapWidget(
+                      order: widget.order,
+                      riderLat: null,
+                      riderLng: null,
+                    ),
+                    error: (_, __) => OrderMapWidget(
+                      order: widget.order,
+                      riderLat: null,
+                      riderLng: null,
+                    ),
+                  ),
+
+                  // Leyenda de marcadores
+                  Positioned(
+                    top: 12,
+                    left: 12,
+                    child: Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.1),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _LegendItem(
+                            color: const Color(0xFF0066FF),
+                            label: 'Rider',
+                            icon: Icons.directions_bike,
+                          ),
+                          const SizedBox(height: 6),
+                          _LegendItem(
+                            color: const Color(0xFFFF5722),
+                            label: 'Pickup',
+                            icon: Icons.store,
+                          ),
+                          const SizedBox(height: 6),
+                          _LegendItem(
+                            color: const Color(0xFF4CAF50),
+                            label: 'Entrega',
+                            icon: Icons.person,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ),
             ),
 
@@ -328,6 +392,48 @@ class _AddressRow extends StatelessWidget {
                 ),
               ),
             ],
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _LegendItem extends StatelessWidget {
+  final Color color;
+  final String label;
+  final IconData icon;
+
+  const _LegendItem({
+    required this.color,
+    required this.label,
+    required this.icon,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            color: color,
+            shape: BoxShape.circle,
+          ),
+          child: Icon(
+            icon,
+            size: 12,
+            color: Colors.white,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
           ),
         ),
       ],

@@ -38,7 +38,7 @@ class OrderAssignedScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            
+
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(24),

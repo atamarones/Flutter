@@ -5,6 +5,7 @@ import '../../../domain/entities/rider.dart';
 import '../../../domain/entities/order.dart';
 import '../../../core/theme/app_colors.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'rider_marker_widget.dart';
 
 class RiderMapWidget extends ConsumerStatefulWidget {
   final Rider rider;
@@ -22,6 +23,27 @@ class RiderMapWidget extends ConsumerStatefulWidget {
 
 class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
   MapboxMap? _mapboxMap;
+  PointAnnotationManager? _annotationManager;
+  PointAnnotation? _riderMarker;
+  PointAnnotation? _pickupMarker;
+  double? _lastLat;
+  double? _lastLng;
+
+  @override
+  void didUpdateWidget(RiderMapWidget oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Detectar cambios en la ubicación del rider
+    if (widget.rider.currentLat != oldWidget.rider.currentLat ||
+        widget.rider.currentLng != oldWidget.rider.currentLng) {
+      _updateRiderPosition();
+    }
+
+    // Detectar cambios en la orden activa
+    if (widget.activeOrder != oldWidget.activeOrder) {
+      _updateMarkers();
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -49,13 +71,24 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
                 widget.rider.currentLat!,
               ),
             ),
-            zoom: 15.0,
+            zoom: 20.0,
           ),
           styleUri: MapboxStyles.MAPBOX_STREETS,
           textureView: true,
           onMapCreated: _onMapCreated,
         ),
-        
+
+        // Marcador animado personalizado para el rider
+        Center(
+          child: Container(
+            margin: const EdgeInsets.only(bottom: 40), // Ajustar para centrar en el punto
+            child: const RiderMarkerWidget(
+              size: 100,
+              color: Color(0xFF0066FF),
+            ),
+          ),
+        ),
+
         // Overlay inferior con información
         Positioned(
           left: 0,
@@ -168,40 +201,86 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
 
   void _onMapCreated(MapboxMap mapboxMap) async {
     _mapboxMap = mapboxMap;
+    _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+    await _addMarkers();
+  }
+
+  Future<void> _updateRiderPosition() async {
+    if (_mapboxMap == null ||
+        _annotationManager == null ||
+        widget.rider.currentLat == null ||
+        widget.rider.currentLng == null) {
+      return;
+    }
+
+    // Evitar actualizaciones redundantes
+    if (_lastLat == widget.rider.currentLat &&
+        _lastLng == widget.rider.currentLng) {
+      return;
+    }
+
+    _lastLat = widget.rider.currentLat;
+    _lastLng = widget.rider.currentLng;
+
+    // No crear marcador del rider aquí - usamos el overlay animado personalizado
+    // Solo mantener el marcador del pickup si existe
+
+    // Animar la cámara hacia la nueva posición (solo si no hay orden activa)
+    if (widget.activeOrder == null) {
+      final newCamera = CameraOptions(
+        center: Point(
+          coordinates: Position(
+            widget.rider.currentLng!,
+            widget.rider.currentLat!,
+          ),
+        ),
+        zoom: 20.0,
+      );
+
+      await _mapboxMap!.flyTo(newCamera, MapAnimationOptions(duration: 1500));
+    } else {
+      // Si hay orden activa, ajustar bounds para mostrar ambos puntos
+      await _fitBounds();
+    }
+  }
+
+  Future<void> _updateMarkers() async {
+    if (_mapboxMap == null || _annotationManager == null) return;
+
+    // Limpiar marcadores existentes
+    if (_riderMarker != null) {
+      await _annotationManager!.delete(_riderMarker!);
+    }
+    if (_pickupMarker != null) {
+      await _annotationManager!.delete(_pickupMarker!);
+    }
+
+    // Recrear marcadores
     await _addMarkers();
   }
 
   Future<void> _addMarkers() async {
-    if (_mapboxMap == null) return;
+    if (_mapboxMap == null || _annotationManager == null) return;
 
-    final pointAnnotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
-
-    // Marker del rider
-    final riderMarker = PointAnnotationOptions(
-      geometry: Point(
-        coordinates: Position(
-          widget.rider.currentLng!,
-          widget.rider.currentLat!,
-        ),
-      ),
-      iconImage: 'marker',
-      iconSize: 1.5,
-    );
-    await pointAnnotationManager.create(riderMarker);
+    // No crear marcador del rider - usamos el overlay animado personalizado en el centro
+    _lastLat = widget.rider.currentLat;
+    _lastLng = widget.rider.currentLng;
 
     // Marker del pickup si hay orden activa
     if (widget.activeOrder != null) {
-      final pickupMarker = PointAnnotationOptions(
-        geometry: Point(
-          coordinates: Position(
-            widget.activeOrder!.pickupLng,
-            widget.activeOrder!.pickupLat,
+      _pickupMarker = await _annotationManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(
+            coordinates: Position(
+              widget.activeOrder!.pickupLng,
+              widget.activeOrder!.pickupLat,
+            ),
           ),
+          iconImage: 'marker',
+          iconSize: 1.5,
+          iconColor: Colors.red.value,
         ),
-        iconImage: 'marker',
-        iconSize: 1.2,
       );
-      await pointAnnotationManager.create(pickupMarker);
 
       await _fitBounds();
     }

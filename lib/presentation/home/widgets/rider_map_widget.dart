@@ -71,7 +71,7 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
                 widget.rider.currentLat!,
               ),
             ),
-            zoom: 20.0,
+            zoom: 17.0,
           ),
           styleUri: MapboxStyles.MAPBOX_STREETS,
           textureView: true,
@@ -234,7 +234,7 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
             widget.rider.currentLat!,
           ),
         ),
-        zoom: 20.0,
+        zoom: 17.0,
       );
 
       await _mapboxMap!.flyTo(newCamera, MapAnimationOptions(duration: 1500));

@@ -1,10 +1,10 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 import '../constants/app_constants.dart';
+import '../utils/app_logger.dart';
 
 /// Handler para el Foreground Service
 /// Este código corre en un isolate separado y se ejecuta continuamente
@@ -19,7 +19,7 @@ class RiderTrackingHandler extends TaskHandler {
 
   @override
   Future<void> onStart(DateTime timestamp, TaskStarter starter) async {
-    debugPrint('🚀 [FOREGROUND SERVICE] Iniciado');
+    LoggerCategories.foregroundService('Iniciado', level: LogLevel.info);
   }
 
   @override
@@ -34,7 +34,6 @@ class RiderTrackingHandler extends TaskHandler {
       final riderStatus = prefs.getString('rider_status') ?? 'offline';
 
       if (token == null || riderStatus == 'offline') {
-        debugPrint('⚠️ [FOREGROUND SERVICE] Rider offline o sin token');
         return;
       }
 
@@ -56,7 +55,7 @@ class RiderTrackingHandler extends TaskHandler {
         notificationText: 'Última actualización: ${DateTime.now().toString().substring(11, 19)}',
       );
     } catch (e) {
-      debugPrint('❌ [FOREGROUND SERVICE] Error: $e');
+      LoggerCategories.foregroundService('Error en evento repetido: $e', level: LogLevel.error);
     }
   }
 
@@ -66,7 +65,7 @@ class RiderTrackingHandler extends TaskHandler {
       LocationPermission permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied ||
           permission == LocationPermission.deniedForever) {
-        debugPrint('⚠️ [FOREGROUND SERVICE] Permisos de ubicación denegados');
+        LoggerCategories.foregroundService('Permisos de ubicación denegados', level: LogLevel.warning);
         return;
       }
 
@@ -93,12 +92,11 @@ class RiderTrackingHandler extends TaskHandler {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        debugPrint('✅ [FOREGROUND SERVICE] Ubicación actualizada: ${position.latitude}, ${position.longitude}');
       } else {
-        debugPrint('❌ [FOREGROUND SERVICE] Error actualizando ubicación: ${response.statusCode}');
+        LoggerCategories.location('Error actualizando ubicación: ${response.statusCode}');
       }
     } catch (e) {
-      debugPrint('❌ [FOREGROUND SERVICE] Error en update location: $e');
+      AppLogger.error('[FOREGROUND SERVICE] Error en update location', error: e);
     }
   }
 
@@ -114,18 +112,17 @@ class RiderTrackingHandler extends TaskHandler {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
-        debugPrint('💓 [FOREGROUND SERVICE] Heartbeat enviado');
       } else {
-        debugPrint('❌ [FOREGROUND SERVICE] Error en heartbeat: ${response.statusCode}');
+        LoggerCategories.heartbeat('Error en heartbeat: ${response.statusCode}', isError: true);
       }
     } catch (e) {
-      debugPrint('❌ [FOREGROUND SERVICE] Error en heartbeat: $e');
+      LoggerCategories.heartbeat('Error en heartbeat: $e', isError: true);
     }
   }
 
   @override
   Future<void> onDestroy(DateTime timestamp) async {
-    debugPrint('🛑 [FOREGROUND SERVICE] Detenido');
+    LoggerCategories.foregroundService('Detenido', level: LogLevel.info);
   }
 }
 
@@ -160,7 +157,6 @@ class ForegroundTrackingService {
     // Verificar si ya está corriendo
     final isRunning = await FlutterForegroundTask.isRunningService;
     if (isRunning) {
-      debugPrint('⚠️ [FOREGROUND SERVICE] Ya está corriendo');
       return true;
     }
 
@@ -176,10 +172,10 @@ class ForegroundTrackingService {
         callback: startCallback,
       );
 
-      debugPrint('✅ [FOREGROUND SERVICE] Iniciado exitosamente');
+      LoggerCategories.foregroundService('Iniciado exitosamente', level: LogLevel.info);
       return true;
     } catch (e) {
-      debugPrint('❌ [FOREGROUND SERVICE] Error al iniciar: $e');
+      AppLogger.error('[FOREGROUND SERVICE] Error al iniciar', error: e);
       return false;
     }
   }
@@ -188,10 +184,10 @@ class ForegroundTrackingService {
   static Future<bool> stop() async {
     try {
       await FlutterForegroundTask.stopService();
-      debugPrint('✅ [FOREGROUND SERVICE] Detenido exitosamente');
+      LoggerCategories.foregroundService('Detenido exitosamente', level: LogLevel.info);
       return true;
     } catch (e) {
-      debugPrint('❌ [FOREGROUND SERVICE] Error al detener: $e');
+      AppLogger.error('[FOREGROUND SERVICE] Error al detener', error: e);
       return false;
     }
   }
@@ -207,10 +203,8 @@ class ForegroundTrackingService {
     // Por ahora solo verificamos que exista
     final prefs = await SharedPreferences.getInstance();
     final token = prefs.getString('access_token');
-    if (token != null) {
-      debugPrint('✅ [FOREGROUND SERVICE] Token encontrado para el servicio');
-    } else {
-      debugPrint('⚠️ [FOREGROUND SERVICE] No se encontró token');
+    if (token == null) {
+      AppLogger.warning('[FOREGROUND SERVICE] No se encontró token');
     }
   }
 
@@ -218,14 +212,12 @@ class ForegroundTrackingService {
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', token);
-    debugPrint('✅ [FOREGROUND SERVICE] Token guardado');
   }
 
   /// Guardar estado del rider
   static Future<void> saveRiderStatus(String status) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('rider_status', status);
-    debugPrint('✅ [FOREGROUND SERVICE] Estado guardado: $status');
   }
 
   /// Limpiar datos del servicio
@@ -233,6 +225,5 @@ class ForegroundTrackingService {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');
     await prefs.remove('rider_status');
-    debugPrint('✅ [FOREGROUND SERVICE] Datos limpiados');
   }
 }

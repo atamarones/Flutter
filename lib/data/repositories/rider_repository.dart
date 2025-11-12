@@ -5,6 +5,7 @@ import 'dart:convert';
 import '../../core/services/supabase_service.dart';
 import '../../core/constants/app_constants.dart';
 import '../../domain/entities/rider.dart';
+import '../../core/utils/app_logger.dart';
 
 class RiderRepository {
   final SupabaseClient _supabase = SupabaseService.client;
@@ -38,8 +39,6 @@ class RiderRepository {
     final session = _supabase.auth.currentSession;
     if (session == null) throw Exception('No active session');
 
-    debugPrint('[LOCATION UPDATE] Sending to edge function - Lat: $lat, Lng: $lng');
-
     final response = await http.post(
       Uri.parse('${AppConstants.supabaseUrl}/functions/v1/update-rider-location'),
       headers: {
@@ -50,9 +49,8 @@ class RiderRepository {
       body: jsonEncode({'lat': lat, 'lng': lng}),
     );
 
-    debugPrint('[LOCATION UPDATE] Response: ${response.statusCode} - ${response.body}');
-
     if (response.statusCode != 200) {
+      AppLogger.error('[LOCATION UPDATE] Failed: ${response.statusCode} - ${response.body}');
       throw Exception('Failed to update location: ${response.body}');
     }
   }
@@ -64,9 +62,6 @@ class RiderRepository {
     final session = _supabase.auth.currentSession;
     if (session == null) throw Exception('No active session');
 
-    debugPrint('[HEARTBEAT] Sending to edge function');
-    debugPrint('[HEARTBEAT] User: ${session.user.id}');
-
     final response = await http.post(
       Uri.parse('${AppConstants.supabaseUrl}/functions/v1/rider-heartbeat'),
       headers: {
@@ -76,10 +71,8 @@ class RiderRepository {
       },
     );
 
-    debugPrint('[HEARTBEAT] Status: ${response.statusCode}');
-    debugPrint('[HEARTBEAT] Response: ${response.body}');
-
     if (response.statusCode != 200) {
+      LoggerCategories.heartbeat('Failed: ${response.statusCode} - ${response.body}', isError: true);
       throw Exception('Heartbeat failed: ${response.statusCode} - ${response.body}');
     }
   }

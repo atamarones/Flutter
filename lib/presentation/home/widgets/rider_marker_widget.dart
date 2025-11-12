@@ -59,7 +59,7 @@ class _RiderMarkerWidgetState extends State<RiderMarkerWidget>
                 height: widget.size * _pulseAnimation.value * 0.8,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: widget.color.withOpacity(0.1),
+                  color: widget.color.withValues(alpha: 0.1),
                 ),
               );
             },
@@ -74,7 +74,7 @@ class _RiderMarkerWidgetState extends State<RiderMarkerWidget>
                 height: widget.size * (1.2 - _pulseAnimation.value * 0.2) * 0.6,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: widget.color.withOpacity(0.2),
+                  color: widget.color.withValues(alpha: 0.2),
                 ),
               );
             },
@@ -89,13 +89,13 @@ class _RiderMarkerWidgetState extends State<RiderMarkerWidget>
               gradient: RadialGradient(
                 colors: [
                   widget.color,
-                  widget.color.withOpacity(0.8),
+                  widget.color.withValues(alpha: 0.8),
                 ],
                 stops: const [0.5, 1.0],
               ),
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withOpacity(0.5),
+                  color: widget.color.withValues(alpha: 0.5),
                   blurRadius: 8,
                   spreadRadius: 2,
                 ),

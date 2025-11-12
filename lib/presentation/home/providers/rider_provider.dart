@@ -7,6 +7,7 @@ import '../../../core/services/location_service.dart';
 import '../../../core/services/foreground_tracking_service.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../../core/utils/app_logger.dart';
 
 export '../../../core/services/location_service.dart';
 
@@ -109,27 +110,22 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
       final session = SupabaseService.client.auth.currentSession;
       if (session != null) {
         await ForegroundTrackingService.saveToken(session.accessToken);
-        debugPrint('Token saved: ${session.accessToken.substring(0, 20)}...');
       }
     } catch (e) {
-      debugPrint('Error refreshing token: $e');
+      AppLogger.error('[RIDER] Error refreshing token', error: e);
     }
   }
 
   Future<void> _startServices() async {
-    debugPrint('🚀 INICIANDO SERVICIOS DE TRACKING 🚀');
-
     // Iniciar el Foreground Service (este maneja heartbeat y location en background)
     final started = await ForegroundTrackingService.start();
     if (!started) {
-      debugPrint('❌ Error iniciando Foreground Service');
+      AppLogger.error('[RIDER] Error iniciando Foreground Service');
     }
 
     // Iniciar tracking de ubicación en la app para UI en tiempo real
     _locationService.startLocationUpdates((position) async {
       try {
-        debugPrint('📍 UBICACIÓN ACTUALIZADA (UI): Lat ${position.latitude}, Lng ${position.longitude}');
-
         // Actualizar ubicación en el backend
         await _riderRepository.updateLocation(
           position.latitude,
@@ -145,7 +141,7 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
           ));
         }
       } catch (e) {
-        debugPrint('Location update error: $e');
+        AppLogger.error('[RIDER] Location update error', error: e);
       }
     });
 
@@ -157,9 +153,8 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
         try {
           await _refreshAndSaveToken();
           await _riderRepository.sendHeartbeat();
-          debugPrint('💓 Heartbeat enviado (app)');
         } catch (e) {
-          debugPrint('Heartbeat error: $e');
+          AppLogger.error('[RIDER] Heartbeat error', error: e);
         }
       },
     );
@@ -172,17 +167,12 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
         final updated = await _loadRider();
         if (updated != null) {
           state = AsyncValue.data(updated);
-          debugPrint('🔄 Datos del rider actualizados');
         }
       },
     );
-
-    debugPrint('✅ Servicios iniciados: Foreground Service + Location Service + Timers');
   }
 
   Future<void> _stopServices() async {
-    debugPrint('🛑 DETENIENDO SERVICIOS DE TRACKING 🛑');
-
     // Detener Foreground Service
     await ForegroundTrackingService.stop();
 
@@ -190,8 +180,6 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
     _locationService.stopLocationUpdates();
     _heartbeatTimer?.cancel();
     _refreshTimer?.cancel();
-
-    debugPrint('✅ Todos los servicios detenidos');
   }
 }
 

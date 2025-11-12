@@ -17,9 +17,9 @@ class AppConstants {
   );
   
   // Location Settings
-  static const int locationUpdateIntervalSeconds = 35;
-  static const int heartbeatIntervalSeconds = 35;
-  static const double deliveryRadiusMeters = 100.0;
+  static const int locationUpdateIntervalSeconds = 15;
+  static const int heartbeatIntervalSeconds = 15;
+  static const double deliveryRadiusMeters = 50.0;
   
   // Order Assignment
   static const int orderTimeoutSeconds = 59;

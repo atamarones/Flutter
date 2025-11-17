@@ -50,7 +50,7 @@ class _RiderMarkerWidgetState extends State<RiderMarkerWidget>
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Efecto de pulso exterior (más lento)
+          // Efecto de pulso exterior
           AnimatedBuilder(
             animation: _pulseAnimation,
             builder: (context, child) {
@@ -80,34 +80,25 @@ class _RiderMarkerWidgetState extends State<RiderMarkerWidget>
             },
           ),
 
-          // Círculo principal con gradiente
+          // Círculo principal sólido (sin gradiente)
           Container(
             width: widget.size * 0.4,
             height: widget.size * 0.4,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              gradient: RadialGradient(
-                colors: [
-                  widget.color,
-                  widget.color.withValues(alpha: 0.8),
-                ],
-                stops: const [0.5, 1.0],
-              ),
+              color: widget.color,
               boxShadow: [
                 BoxShadow(
-                  color: widget.color.withValues(alpha: 0.5),
-                  blurRadius: 8,
-                  spreadRadius: 2,
+                  color: widget.color.withValues(alpha: 0.4),
+                  blurRadius: 10,
+                  spreadRadius: 3,
                 ),
               ],
             ),
-            child: Center(
-              // Ícono de bicicleta
-              child: Icon(
-                Icons.directions_bike,
-                color: Colors.white,
-                size: widget.size * 0.25,
-              ),
+            child: Icon(
+              Icons.directions_bike,
+              color: Colors.white,
+              size: widget.size * 0.25,
             ),
           ),
         ],

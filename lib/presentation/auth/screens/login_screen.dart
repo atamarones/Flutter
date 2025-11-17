@@ -33,7 +33,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
 
     if (success && mounted) {
-      context.go('/home');
+      // Esperar a que el authStateProvider confirme que hay sesión válida
+      final authState = await ref.read(authStateProvider.future);
+      if (authState.session != null && mounted) {
+        context.go('/home');
+      }
     }
   }
 

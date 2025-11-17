@@ -6,6 +6,7 @@ import '../../../core/theme/app_colors.dart';
 import '../../../domain/entities/order.dart';
 import '../../home/providers/rider_provider.dart';
 import '../providers/order_provider.dart';
+import '../../settings/providers/settings_provider.dart';
 
 class OrderInProgressScreen extends ConsumerWidget {
   const OrderInProgressScreen({super.key});
@@ -147,16 +148,16 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
                   label: const Text('CONFIRMAR RECOGIDA'),
                 ),
               ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () => _showReleaseDialog(context),
-                icon: const Icon(Icons.cancel, color: AppColors.error),
-                label: const Text('LIBERAR PEDIDO', style: TextStyle(color: AppColors.error)),
-                style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error)),
-              ),
-            ),
+            // const SizedBox(height: 8),
+            // SizedBox(
+            //   width: double.infinity,
+            //   child: OutlinedButton.icon(
+            //     onPressed: () => _showReleaseDialog(context),
+            //     icon: const Icon(Icons.cancel, color: AppColors.error),
+            //     label: const Text('LIBERAR PEDIDO', style: TextStyle(color: AppColors.error)),
+            //     style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error)),
+            //   ),
+            // ),
           ],
         ),
       );
@@ -190,16 +191,16 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
               label: const Text('ENTREGAR'),
             ),
           ),
-          const SizedBox(height: 8),
-          SizedBox(
-            width: double.infinity,
-            child: OutlinedButton.icon(
-              onPressed: () => _showReleaseDialog(context),
-              icon: const Icon(Icons.cancel, color: AppColors.error),
-              label: const Text('LIBERAR PEDIDO', style: TextStyle(color: AppColors.error)),
-              style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error)),
-            ),
-          ),
+          // const SizedBox(height: 8),
+          // SizedBox(
+          //   width: double.infinity,
+          //   child: OutlinedButton.icon(
+          //     onPressed: () => _showReleaseDialog(context),
+          //     icon: const Icon(Icons.cancel, color: AppColors.error),
+          //     label: const Text('LIBERAR PEDIDO', style: TextStyle(color: AppColors.error)),
+          //     style: OutlinedButton.styleFrom(side: const BorderSide(color: AppColors.error)),
+          //   ),
+          // ),
         ],
       ),
     );
@@ -230,7 +231,16 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
   }
 
   Future<void> _openMaps() async {
-    final url = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=${widget.order.deliveryLat},${widget.order.deliveryLng}');
+    final settings = ref.read(settingsProvider);
+    final lat = widget.order.deliveryLat;
+    final lng = widget.order.deliveryLng;
+
+    final url = switch (settings.navigationMethod) {
+      NavigationMethod.googleMaps => Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
+      NavigationMethod.waze => Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes'),
+      NavigationMethod.appleMaps => Uri.parse('https://maps.apple.com/?daddr=$lat,$lng'),
+    };
+
     if (await canLaunchUrl(url)) {
       await launchUrl(url, mode: LaunchMode.externalApplication);
     }
@@ -267,59 +277,6 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
     }
   }
 
-  Future<void> _showReleaseDialog(BuildContext context) async {
-    final reasons = ['Cliente no responde', 'Dirección incorrecta', 'Problemas con el pedido', 'Otro'];
-    String? selectedReason = reasons[0];
-    
-    if (!mounted) return;
-    
-    final result = await showDialog<String>(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Liberar Pedido'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: reasons.map((reason) => ListTile(
-              title: Text(reason),
-              leading: Radio<String>(
-                value: reason,
-                groupValue: selectedReason,
-                onChanged: (value) {
-                  setState(() => selectedReason = value);
-                },
-              ),
-              onTap: () {
-                setState(() => selectedReason = reason);
-              },
-            )).toList(),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('CANCELAR'),
-            ),
-            ElevatedButton(
-              onPressed: () => Navigator.pop(dialogContext, selectedReason),
-              child: const Text('CONFIRMAR'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null) {
-      if (!mounted) return;
-      
-      await ref.read(activeOrderProvider.notifier).releaseOrder(widget.order.id, result);
-      
-      if (!mounted) return;
-      
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Pedido liberado')),
-      );
-    }
-  }
 }
 
 class _SectionTitle extends StatelessWidget {

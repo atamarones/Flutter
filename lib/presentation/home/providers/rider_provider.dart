@@ -1,5 +1,5 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:flutter/foundation.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import '../../../data/repositories/rider_repository.dart';
 import '../../../domain/entities/rider.dart';
@@ -35,34 +35,79 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
 
   @override
   Future<Rider?> build() async {
-    final user = ref.read(authRepositoryProvider).getCurrentUser();
-    if (user == null) throw Exception('User not authenticated');
-    
+    // Retry mechanism para obtener el usuario (soluciona race condition después del login)
+    User? user;
+    int retries = 0;
+    const maxRetries = 5;
+
+    AppLogger.info('[RIDER_PROVIDER] Iniciando build - Obteniendo usuario autenticado');
+
+    while (user == null && retries < maxRetries) {
+      user = ref.read(authRepositoryProvider).getCurrentUser();
+      if (user == null) {
+        AppLogger.warning('[RIDER_PROVIDER] Usuario no disponible, retry ${retries + 1}/$maxRetries');
+        await Future.delayed(Duration(milliseconds: 200 * (retries + 1)));
+        retries++;
+      }
+    }
+
+    if (user == null) {
+      AppLogger.error('[RIDER_PROVIDER] No se pudo obtener usuario después de $maxRetries intentos');
+      throw Exception('User not authenticated. Por favor, cierra e inicia sesión nuevamente.');
+    }
+
+    AppLogger.info('[RIDER_PROVIDER] Usuario autenticado: ${user.email} (ID: ${user.id})');
+
     _userId = user.id;
     _riderRepository = ref.read(riderRepositoryProvider);
     _locationService = ref.read(locationServiceProvider);
-    
+
+    // Escuchar cambios en el estado de autenticación
+    ref.listen(authStateProvider, (previous, next) {
+      next.whenData((authState) {
+        final currentUser = authState.session?.user;
+        // Si el usuario cambió o se deslogueó, invalidar este provider
+        if (currentUser == null || currentUser.id != _userId) {
+          ref.invalidateSelf();
+        }
+      });
+    });
+
     ref.onDispose(() {
       _stopServices();
     });
-    
+
     return await _loadRider();
   }
 
   Future<Rider?> _loadRider() async {
     try {
+      AppLogger.info('[RIDER_PROVIDER] Cargando rider desde BD para user_id: $_userId');
       final rider = await _riderRepository.getRiderByUserId(_userId);
+
       if (rider == null) {
-        debugPrint('Rider not found for user: $_userId');
+        AppLogger.error('[RIDER_PROVIDER] No se encontró rider en la BD para user_id: $_userId');
+        final errorMsg = 'No se encontró un perfil de repartidor asociado a esta cuenta.\n\n'
+            'User ID: $_userId\n\n'
+            'Por favor, contacta al administrador para verificar que tu cuenta '
+            'esté correctamente configurada en el sistema.';
+        throw Exception(errorMsg);
       }
+
+      AppLogger.info('[RIDER_PROVIDER] Rider cargado exitosamente: ${rider.fullName} (ID: ${rider.id})');
       return rider;
     } catch (e) {
       // Solo loguear errores que no sean de conexión
       if (!e.toString().contains('SocketException') &&
           !e.toString().contains('Failed host lookup')) {
-        debugPrint('Error loading rider: $e');
+        AppLogger.error('[RIDER_PROVIDER] Error cargando rider', error: e);
       }
-      // Si hay error de red, mantener el estado actual del rider
+      // Si es el primer intento de carga (no hay estado previo), propagar el error
+      if (state.value == null) {
+        rethrow;
+      }
+      // Si hay error de red y ya tenemos datos, mantener el estado actual del rider
+      AppLogger.warning('[RIDER_PROVIDER] Error de red, manteniendo estado actual');
       return state.value;
     }
   }

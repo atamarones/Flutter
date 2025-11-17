@@ -15,29 +15,49 @@ class ActiveOrderNotifier extends AsyncNotifier<Order?> {
   @override
   Future<Order?> build() async {
     final riderAsync = ref.watch(riderStateProvider);
-    
+
     await riderAsync.when(
       data: (rider) async {
         if (rider != null) {
           _riderId = rider.id;
           _orderRepository = ref.read(orderRepositoryProvider);
-          
+
           ref.onDispose(() {
             _channel?.unsubscribe();
+            _channel = null;
           });
-          
+
           _subscribeToOrders();
         }
       },
       loading: () async {},
       error: (_, __) async {},
     );
-    
+
     if (riderAsync.value?.id == null) return null;
     _riderId = riderAsync.value!.id;
     _orderRepository = ref.read(orderRepositoryProvider);
+
+    // Escuchar cambios en el estado de autenticación
+    // Importar auth_provider para acceder a authStateProvider
+    ref.listen(
+      riderStateProvider,
+      (previous, next) {
+        // Si el rider cambió o se eliminó, invalidar este provider
+        final previousRiderId = previous?.value?.id;
+        final currentRiderId = next.value?.id;
+
+        if (previousRiderId != null && previousRiderId != currentRiderId) {
+          // El rider cambió - limpiar suscripción y invalidar
+          _channel?.unsubscribe();
+          _channel = null;
+          ref.invalidateSelf();
+        }
+      },
+    );
+
     _subscribeToOrders();
-    
+
     return await _loadActiveOrder();
   }
 

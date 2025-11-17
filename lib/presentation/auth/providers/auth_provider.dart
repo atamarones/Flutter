@@ -60,3 +60,24 @@ class LoginNotifier extends Notifier<LoginState> {
 final loginProvider = NotifierProvider<LoginNotifier, LoginState>(() {
   return LoginNotifier();
 });
+
+/// Helper seguro para logout que invalida todos los providers
+/// Esto previene Cross-User Data Leakage
+///
+/// IMPORTANTE: Siempre usa este método en lugar de authRepository.logout() directamente
+/// para garantizar que todos los datos del usuario se limpien correctamente
+Future<void> secureLogout(WidgetRef ref) async {
+  // 1. Ejecutar logout en el repositorio (limpia tokens, detiene servicios)
+  await ref.read(authRepositoryProvider).logout();
+
+  // 2. Invalidar TODOS los providers de la aplicación
+  // Esto es CRÍTICO para prevenir Cross-User Data Leakage
+  // Los datos del usuario anterior se eliminan completamente de memoria
+  ref.invalidate(authStateProvider);
+  ref.invalidate(currentUserProvider);
+  ref.invalidate(loginProvider);
+
+  // NOTA: No necesitamos invalidar riderStateProvider y activeOrderProvider
+  // explícitamente porque ahora tienen listeners de authStateProvider que
+  // se invalidan automáticamente cuando el usuario cambia
+}

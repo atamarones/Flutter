@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -12,15 +11,24 @@ class RiderRepository {
 
   Future<Rider?> getRiderByUserId(String userId) async {
     try {
+      AppLogger.info('[RIDER_REPO] Consultando rider con user_id: $userId');
+
       final response = await _supabase
           .from('riders')
           .select()
           .eq('user_id', userId)
           .single();
-      
+
+      AppLogger.info('[RIDER_REPO] Rider encontrado: ${response['full_name']} (ID: ${response['id']})');
       return Rider.fromJson(response);
     } catch (e) {
-      debugPrint('getRiderByUserId error: $e');
+      AppLogger.error('[RIDER_REPO] Error al obtener rider', error: e);
+
+      // Si el error es porque no se encontró el rider (PostgrestException)
+      if (e.toString().contains('PGRST116') || e.toString().contains('JSON object requested')) {
+        AppLogger.warning('[RIDER_REPO] No existe un rider con user_id: $userId en la tabla riders');
+      }
+
       return null;
     }
   }

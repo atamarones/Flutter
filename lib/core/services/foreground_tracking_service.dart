@@ -209,6 +209,13 @@ class ForegroundTrackingService {
   }
 
   /// Guardar token para el servicio
+  ///
+  /// ADVERTENCIA DE SEGURIDAD:
+  /// Este método guarda el token en SharedPreferences SIN ENCRIPTACIÓN.
+  /// En dispositivos rooteados, el token puede ser leído por otras aplicaciones.
+  ///
+  /// TODO: Migrar a flutter_secure_storage para encriptar el token
+  /// Severidad: ALTA - Riesgo de exposición de credenciales
   static Future<void> saveToken(String token) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString('access_token', token);
@@ -221,6 +228,9 @@ class ForegroundTrackingService {
   }
 
   /// Limpiar datos del servicio
+  ///
+  /// SEGURIDAD: Este método es CRÍTICO para prevenir Cross-User Data Leakage.
+  /// Se llama automáticamente en logout para eliminar tokens del usuario anterior.
   static Future<void> clearData() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove('access_token');

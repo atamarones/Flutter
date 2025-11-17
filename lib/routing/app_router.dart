@@ -6,6 +6,7 @@ import '../presentation/auth/screens/forgot_password_screen.dart';
 import '../presentation/home/screens/home_screen.dart';
 import '../presentation/profile/screens/profile_screen.dart';
 import '../presentation/order/screens/order_history_screen.dart';
+import '../presentation/settings/screens/settings_screen.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
   return GoRouter(
@@ -17,6 +18,7 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/home', builder: (context, state) => const HomeScreen()),
       GoRoute(path: '/profile', builder: (context, state) => const ProfileScreen()),
       GoRoute(path: '/history', builder: (context, state) => const OrderHistoryScreen()),
+      GoRoute(path: '/settings', builder: (context, state) => const SettingsScreen()),
     ],
   );
 });

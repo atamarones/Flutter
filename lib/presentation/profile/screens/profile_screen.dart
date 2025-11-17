@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../home/providers/rider_provider.dart';
 import '../../auth/providers/auth_provider.dart';
+import '../../common/widgets/rider_avatar.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -22,13 +23,11 @@ class ProfileScreen extends ConsumerWidget {
             padding: const EdgeInsets.all(24),
             child: Column(
               children: [
-                CircleAvatar(
+                RiderAvatar(
+                  riderId: rider.id,
+                  fullName: rider.fullName,
+                  avatarUrl: rider.avatarUrl,
                   radius: 60,
-                  backgroundColor: AppColors.primary,
-                  child: Text(
-                    rider.fullName.substring(0, 1).toUpperCase(),
-                    style: const TextStyle(fontSize: 48, color: Colors.white),
-                  ),
                 ),
                 const SizedBox(height: 24),
                 _InfoCard(
@@ -54,9 +53,18 @@ class ProfileScreen extends ConsumerWidget {
                 const SizedBox(height: 32),
                 SizedBox(
                   width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => context.push('/settings'),
+                    icon: const Icon(Icons.settings),
+                    label: const Text('CONFIGURACIÓN'),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
                   child: OutlinedButton.icon(
                     onPressed: () async {
-                      await ref.read(authRepositoryProvider).logout();
+                      await secureLogout(ref);
                       if (context.mounted) context.go('/login');
                     },
                     icon: const Icon(Icons.logout, color: AppColors.error),

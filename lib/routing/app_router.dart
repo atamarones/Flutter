@@ -1,3 +1,5 @@
+import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../presentation/auth/screens/splash_screen.dart';
@@ -7,10 +9,42 @@ import '../presentation/home/screens/home_screen.dart';
 import '../presentation/profile/screens/profile_screen.dart';
 import '../presentation/order/screens/order_history_screen.dart';
 import '../presentation/settings/screens/settings_screen.dart';
+import '../presentation/auth/providers/auth_provider.dart';
 
 final appRouterProvider = Provider<GoRouter>((ref) {
+  final authState = ref.watch(authStateProvider);
+  final authRepository = ref.watch(authRepositoryProvider);
+
   return GoRouter(
     initialLocation: '/splash',
+    refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
+    redirect: (context, state) {
+      final isAuthLoading = authState.isLoading;
+      final session = authState.value?.session;
+      final isAuthenticated = session != null;
+
+      final isGoingToLogin = state.matchedLocation == '/login';
+      final isGoingToSplash = state.matchedLocation == '/splash';
+      final isGoingToForgotPassword = state.matchedLocation == '/forgot-password';
+
+      // Si NO está autenticado (incluso si está loading), redirigir a login
+      // Esto previene que logout → splash (queremos logout → login directo)
+      if (!isAuthenticated && !isGoingToLogin && !isGoingToForgotPassword) {
+        // EXCEPCIÓN: Si está en splash y cargando, permitir (primera carga de app)
+        if (isGoingToSplash && isAuthLoading) {
+          return null;
+        }
+        return '/login';
+      }
+
+      // Si está autenticado e intenta ir a login/splash, redirigir a home
+      if (isAuthenticated && (isGoingToLogin || isGoingToSplash || isGoingToForgotPassword)) {
+        return '/home';
+      }
+
+      // En cualquier otro caso, permitir la navegación
+      return null;
+    },
     routes: [
       GoRoute(path: '/splash', builder: (context, state) => const SplashScreen()),
       GoRoute(path: '/login', builder: (context, state) => const LoginScreen()),
@@ -22,3 +56,19 @@ final appRouterProvider = Provider<GoRouter>((ref) {
     ],
   );
 });
+
+// Helper para refrescar el router cuando cambia el auth state
+class GoRouterRefreshStream extends ChangeNotifier {
+  GoRouterRefreshStream(Stream<dynamic> stream) {
+    notifyListeners();
+    _subscription = stream.asBroadcastStream().listen((_) => notifyListeners());
+  }
+
+  late final StreamSubscription<dynamic> _subscription;
+
+  @override
+  void dispose() {
+    _subscription.cancel();
+    super.dispose();
+  }
+}

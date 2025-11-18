@@ -43,22 +43,6 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final riderState = ref.watch(riderStateProvider);
     final activeOrderState = ref.watch(activeOrderProvider);
 
-    ref.listen(riderStateProvider, (previous, next) {
-      if (next is AsyncError) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(next.error.toString()),
-            backgroundColor: AppColors.error,
-            action: SnackBarAction(
-              label: 'CONFIGURAR',
-              textColor: Colors.white,
-              onPressed: () => openAppSettings(),
-            ),
-          ),
-        );
-      }
-    });
-
     ref.listen(activeOrderProvider, (previous, next) {
       if (next is AsyncData<Order?>) {
         final order = next.value;

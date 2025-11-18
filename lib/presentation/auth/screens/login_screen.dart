@@ -27,18 +27,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Future<void> _handleLogin() async {
     if (!_formKey.currentState!.validate()) return;
 
-    final success = await ref.read(loginProvider.notifier).login(
+    await ref.read(loginProvider.notifier).login(
       _emailController.text.trim(),
       _passwordController.text,
     );
 
-    if (success && mounted) {
-      // Esperar a que el authStateProvider confirme que hay sesión válida
-      final authState = await ref.read(authStateProvider.future);
-      if (authState.session != null && mounted) {
-        context.go('/home');
-      }
-    }
+    // El router se encarga de redirigir automáticamente cuando cambia el authState
+    // No necesitamos navegar manualmente
   }
 
   @override
@@ -84,9 +79,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                     ),
                     child: ClipOval(
                       child: Padding(
-                        padding: const EdgeInsets.all(15),
+                        padding: const EdgeInsets.all(5),
                         child: Image.asset(
-                          'assets/images/android-icon-192x192.png',
+                          'assets/images/android-icon-500x500.png',
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -95,7 +90,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   const SizedBox(height: 32),
 
                   Text(
-                    'Urbango',
+                    'Repartidor',
                     style: Theme.of(context).textTheme.headlineLarge?.copyWith(
                       fontWeight: FontWeight.bold,
                       color: AppColors.textPrimary,
@@ -103,7 +98,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    'Logistics',
+                    'Login App',
                     style: Theme.of(context).textTheme.titleLarge?.copyWith(
                       color: AppColors.textSecondary,
                     ),

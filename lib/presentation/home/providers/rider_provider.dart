@@ -30,30 +30,25 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
   late RiderRepository _riderRepository;
   late LocationService _locationService;
   late String _userId;
+  late String _riderId;
   Timer? _heartbeatTimer;
-  Timer? _refreshTimer;
+  RealtimeChannel? _riderChannel;
 
   @override
   Future<Rider?> build() async {
-    // Retry mechanism para obtener el usuario (soluciona race condition después del login)
-    User? user;
-    int retries = 0;
-    const maxRetries = 5;
-
     AppLogger.info('[RIDER_PROVIDER] Iniciando build - Obteniendo usuario autenticado');
 
-    while (user == null && retries < maxRetries) {
-      user = ref.read(authRepositoryProvider).getCurrentUser();
-      if (user == null) {
-        AppLogger.warning('[RIDER_PROVIDER] Usuario no disponible, retry ${retries + 1}/$maxRetries');
-        await Future.delayed(Duration(milliseconds: 200 * (retries + 1)));
-        retries++;
-      }
-    }
+    // CRÍTICO: Esperar authState stream en lugar de getCurrentUser() síncrono
+    // getCurrentUser() puede retornar null justo después del login
+    // mientras Supabase procesa internamente. El stream garantiza el estado correcto.
+    final authState = await ref.watch(authStateProvider.future);
+    final user = authState.session?.user;
 
     if (user == null) {
-      AppLogger.error('[RIDER_PROVIDER] No se pudo obtener usuario después de $maxRetries intentos');
-      throw Exception('User not authenticated. Por favor, cierra e inicia sesión nuevamente.');
+      AppLogger.warning('[RIDER_PROVIDER] No hay usuario autenticado - retornando null (router manejará navegación)');
+      // NO hacer throw - dejar que el router redirija a login
+      // Retornar null previene loop infinito de rebuild
+      return null;
     }
 
     AppLogger.info('[RIDER_PROVIDER] Usuario autenticado: ${user.email} (ID: ${user.id})');
@@ -63,11 +58,14 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
     _locationService = ref.read(locationServiceProvider);
 
     // Escuchar cambios en el estado de autenticación
+    // SOLO si hay usuario actual (previene loop en logout)
     ref.listen(authStateProvider, (previous, next) {
       next.whenData((authState) {
         final currentUser = authState.session?.user;
-        // Si el usuario cambió o se deslogueó, invalidar este provider
-        if (currentUser == null || currentUser.id != _userId) {
+
+        // Si cambió de un usuario a otro (NO de usuario a null)
+        if (currentUser != null && currentUser.id != _userId) {
+          AppLogger.info('[RIDER_PROVIDER] Nuevo usuario detectado - reconstruyendo provider');
           ref.invalidateSelf();
         }
       });
@@ -75,6 +73,8 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
 
     ref.onDispose(() {
       _stopServices();
+      _riderChannel?.unsubscribe();
+      _riderChannel = null;
     });
 
     return await _loadRider();
@@ -95,6 +95,11 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
       }
 
       AppLogger.info('[RIDER_PROVIDER] Rider cargado exitosamente: ${rider.fullName} (ID: ${rider.id})');
+      _riderId = rider.id;
+
+      // Suscribirse a cambios en tiempo real del rider
+      _subscribeToRiderChanges();
+
       return rider;
     } catch (e) {
       // Solo loguear errores que no sean de conexión
@@ -203,18 +208,38 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
         }
       },
     );
+  }
 
-    // Refrescar datos del rider periódicamente
-    _refreshTimer?.cancel();
-    _refreshTimer = Timer.periodic(
-      const Duration(seconds: 10),
-      (_) async {
-        final updated = await _loadRider();
-        if (updated != null) {
-          state = AsyncValue.data(updated);
-        }
-      },
-    );
+  /// Suscripción a cambios en tiempo real del rider (Realtime WebSocket)
+  /// Esto elimina la necesidad de polling cada 10 segundos
+  void _subscribeToRiderChanges() {
+    // Limpiar suscripción anterior si existe
+    _riderChannel?.unsubscribe();
+
+    AppLogger.info('[RIDER_REALTIME] Suscribiéndose a cambios del rider: $_riderId');
+
+    _riderChannel = SupabaseService.client
+        .channel('rider:$_riderId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'riders',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'id',
+            value: _riderId,
+          ),
+          callback: (payload) {
+            try {
+              AppLogger.info('[RIDER_REALTIME] Cambio detectado en rider');
+              final updatedRider = Rider.fromJson(payload.newRecord);
+              state = AsyncValue.data(updatedRider);
+            } catch (e) {
+              AppLogger.error('[RIDER_REALTIME] Error procesando cambio', error: e);
+            }
+          },
+        )
+        .subscribe();
   }
 
   Future<void> _stopServices() async {
@@ -224,7 +249,11 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
     // Detener servicios de la app
     _locationService.stopLocationUpdates();
     _heartbeatTimer?.cancel();
-    _refreshTimer?.cancel();
+
+    // Limpiar suscripción Realtime
+    _riderChannel?.unsubscribe();
+    _riderChannel = null;
+    AppLogger.info('[RIDER_REALTIME] Canal de Realtime cerrado');
   }
 }
 

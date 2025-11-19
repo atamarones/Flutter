@@ -216,10 +216,12 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
     // Limpiar suscripción anterior si existe
     _riderChannel?.unsubscribe();
 
-    AppLogger.info('[RIDER_REALTIME] Suscribiéndose a cambios del rider: $_riderId');
+    final channelName = 'rider:$_riderId';
+    AppLogger.info('[RIDER_REALTIME] 🔌 Iniciando suscripción a cambios del rider: $_riderId');
+    AppLogger.info('[RIDER_REALTIME] Canal: $channelName');
 
     _riderChannel = SupabaseService.client
-        .channel('rider:$_riderId')
+        .channel(channelName)
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
@@ -231,15 +233,42 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
           ),
           callback: (payload) {
             try {
-              AppLogger.info('[RIDER_REALTIME] Cambio detectado en rider');
+              AppLogger.info('[RIDER_REALTIME] ✅ Cambio detectado en rider');
+              AppLogger.info('[RIDER_REALTIME] Payload: ${payload.newRecord}');
               final updatedRider = Rider.fromJson(payload.newRecord);
               state = AsyncValue.data(updatedRider);
             } catch (e) {
-              AppLogger.error('[RIDER_REALTIME] Error procesando cambio', error: e);
+              AppLogger.error('[RIDER_REALTIME] ❌ Error procesando cambio', error: e);
             }
           },
         )
-        .subscribe();
+        .subscribe((status, error) {
+          if (status == RealtimeSubscribeStatus.subscribed) {
+            AppLogger.info('[RIDER_REALTIME] ✅ SUSCRITO exitosamente al canal: $channelName');
+          } else if (status == RealtimeSubscribeStatus.timedOut) {
+            AppLogger.error('[RIDER_REALTIME] ⏱️ TIMEOUT al suscribirse al canal: $channelName');
+            // Reintentar después de 5 segundos
+            Future.delayed(const Duration(seconds: 5), () {
+              if (_riderChannel != null) {
+                AppLogger.info('[RIDER_REALTIME] 🔄 Reintentando suscripción...');
+                _subscribeToRiderChanges();
+              }
+            });
+          } else if (status == RealtimeSubscribeStatus.channelError) {
+            AppLogger.error('[RIDER_REALTIME] ❌ ERROR en el canal: $channelName - Error: $error');
+            // Reintentar después de 10 segundos
+            Future.delayed(const Duration(seconds: 10), () {
+              if (_riderChannel != null) {
+                AppLogger.info('[RIDER_REALTIME] 🔄 Reintentando suscripción después de error...');
+                _subscribeToRiderChanges();
+              }
+            });
+          } else {
+            AppLogger.warning('[RIDER_REALTIME] Estado del canal: $status');
+          }
+        });
+
+    AppLogger.info('[RIDER_REALTIME] 📡 Esperando confirmación de suscripción...');
   }
 
   Future<void> _stopServices() async {

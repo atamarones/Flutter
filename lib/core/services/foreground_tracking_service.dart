@@ -92,9 +92,13 @@ class RiderTrackingHandler extends TaskHandler {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
+        LoggerCategories.location('Ubicación actualizada correctamente');
       } else {
         LoggerCategories.location('Error actualizando ubicación: ${response.statusCode}');
       }
+    } on http.ClientException catch (e) {
+      // Error de red (DNS, socket, etc.) - no es crítico, se reintentará
+      LoggerCategories.location('Error de red al actualizar ubicación (se reintentará): $e');
     } catch (e) {
       AppLogger.error('[FOREGROUND SERVICE] Error en update location', error: e);
     }
@@ -112,9 +116,13 @@ class RiderTrackingHandler extends TaskHandler {
       ).timeout(const Duration(seconds: 10));
 
       if (response.statusCode == 200) {
+        LoggerCategories.heartbeat('Heartbeat enviado correctamente', isError: false);
       } else {
         LoggerCategories.heartbeat('Error en heartbeat: ${response.statusCode}', isError: true);
       }
+    } on http.ClientException catch (e) {
+      // Error de red (DNS, socket, etc.) - no es crítico, se reintentará
+      LoggerCategories.heartbeat('Error de red (se reintentará): $e', isError: false);
     } catch (e) {
       LoggerCategories.heartbeat('Error en heartbeat: $e', isError: true);
     }

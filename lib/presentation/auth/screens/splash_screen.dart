@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/services/supabase_service.dart';
+import '../../../routing/app_router.dart';
 
 class SplashScreen extends ConsumerStatefulWidget {
   const SplashScreen({super.key});
@@ -17,21 +18,22 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
     _checkAuthState();
   }
 
-  /// Verifica el estado de autenticación de forma reactiva (no síncrona)
-  /// Esto previene race conditions donde getCurrentUser() retorna null
-  /// mientras el auth state aún se está propagando
+  /// Verifica el estado de autenticación después de mostrar el splash
   Future<void> _checkAuthState() async {
-    // Pequeño delay para animación del splash
+    // Delay para mostrar el splash screen (1.5 segundos)
     await Future.delayed(const Duration(milliseconds: 1500));
 
     if (!mounted) return;
 
-    // Escuchar el stream de auth una sola vez para obtener el estado actualizado
-    final authState = await SupabaseService.client.auth.onAuthStateChange.first;
+    // Marcar que ya no es el primer arranque
+    ref.read(isInitialBootProvider.notifier).markAsNotInitial();
+
+    // Obtener sesión actual de forma síncrona (no esperar stream)
+    final currentSession = SupabaseService.client.auth.currentSession;
 
     if (!mounted) return;
 
-    if (authState.session != null) {
+    if (currentSession != null) {
       // Usuario autenticado - navegar a home
       context.go('/home');
     } else {
@@ -85,6 +87,16 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
               'Logistics',
               style: Theme.of(context).textTheme.titleMedium?.copyWith(
                 color: Colors.grey[600],
+              ),
+            ),
+            const SizedBox(height: 48),
+            // Indicador de carga
+            const SizedBox(
+              width: 30,
+              height: 30,
+              child: CircularProgressIndicator(
+                strokeWidth: 3,
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.blue),
               ),
             ),
           ],

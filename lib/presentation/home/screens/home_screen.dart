@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../order/widgets/order_assigned_dialog.dart';
 import 'package:go_router/go_router.dart';
-import 'package:permission_handler/permission_handler.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/services/supabase_service.dart';
 import '../../../core/services/foreground_tracking_service.dart';
@@ -74,38 +73,45 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       }
     });
 
-    if (activeOrderState.value != null && 
-        (activeOrderState.value!.status == OrderStatus.accepted || 
+    if (activeOrderState.value != null &&
+        (activeOrderState.value!.status == OrderStatus.accepted ||
          activeOrderState.value!.status == OrderStatus.inProgress)) {
       return const OrderInProgressScreen();
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Urbango Rider'),
-        leading: Builder(
-          builder: (context) => IconButton(
-            icon: const Icon(Icons.menu),
-            onPressed: () => Scaffold.of(context).openDrawer(),
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        // Deshabilitar el botón de back en la pantalla principal
+        if (didPop) return;
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Urbango Rider'),
+          leading: Builder(
+            builder: (context) => IconButton(
+              icon: const Icon(Icons.menu),
+              onPressed: () => Scaffold.of(context).openDrawer(),
+            ),
           ),
         ),
-      ),
-      drawer: _buildDrawer(context, ref, riderState.value),
-      body: riderState.when(
-        data: (rider) => rider != null
-            ? _buildContent(context, ref, rider)
-            : _buildNoRiderDataError(context, ref),
-        loading: () => const Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              CircularProgressIndicator(),
-              SizedBox(height: 16),
-              Text('Cargando perfil...'),
-            ],
+        drawer: _buildDrawer(context, ref, riderState.value),
+        body: riderState.when(
+          data: (rider) => rider != null
+              ? _buildContent(context, ref, rider)
+              : _buildNoRiderDataError(context, ref),
+          loading: () => const Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                CircularProgressIndicator(),
+                SizedBox(height: 16),
+                Text('Cargando perfil...'),
+              ],
+            ),
           ),
+          error: (error, stack) => _buildErrorView(context, ref, error),
         ),
-        error: (error, stack) => _buildErrorView(context, ref, error),
       ),
     );
   }

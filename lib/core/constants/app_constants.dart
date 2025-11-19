@@ -27,4 +27,7 @@ class AppConstants {
   // App Info
   static const String appName = 'Urbango Logistics';
   static const String appVersion = '1.0.0';
+
+  // Support
+  static const String supportWhatsAppNumber = '+573167107509';
 }

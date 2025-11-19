@@ -4,12 +4,14 @@ import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../domain/entities/order.dart';
 import '../../../core/utils/map_icon_helper.dart';
 
-class OrderMapWidget extends ConsumerStatefulWidget {
+/// Mapa que muestra SOLO rider y punto de pickup
+/// Usado cuando rider va camino a recoger el pedido
+class PickupRouteMapWidget extends ConsumerStatefulWidget {
   final Order order;
   final double? riderLat;
   final double? riderLng;
 
-  const OrderMapWidget({
+  const PickupRouteMapWidget({
     super.key,
     required this.order,
     this.riderLat,
@@ -17,42 +19,34 @@ class OrderMapWidget extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<OrderMapWidget> createState() => _OrderMapWidgetState();
+  ConsumerState<PickupRouteMapWidget> createState() => _PickupRouteMapWidgetState();
 }
 
-class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
+class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _annotationManager;
   PointAnnotation? _riderMarker;
   PointAnnotation? _pickupMarker;
-  PointAnnotation? _deliveryMarker;
   bool _iconsRegistered = false;
 
   @override
-  void didUpdateWidget(OrderMapWidget oldWidget) {
+  void didUpdateWidget(PickupRouteMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-
-    // Actualizar marcadores si cambian los datos
-    if (widget.riderLat != oldWidget.riderLat ||
-        widget.riderLng != oldWidget.riderLng ||
-        widget.order.id != oldWidget.order.id) {
+    if (widget.riderLat != oldWidget.riderLat || widget.riderLng != oldWidget.riderLng) {
       _updateMarkers();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    // Calcular el centro entre pickup y delivery
-    final centerLat = (widget.order.pickupLat + widget.order.deliveryLat) / 2;
-    final centerLng = (widget.order.pickupLng + widget.order.deliveryLng) / 2;
+    final centerLat = widget.riderLat ?? widget.order.pickupLat;
+    final centerLng = widget.riderLng ?? widget.order.pickupLng;
 
     return MapWidget(
-      key: ValueKey('order_map_${widget.order.id}'),
+      key: ValueKey('pickup_route_map_${widget.order.id}'),
       cameraOptions: CameraOptions(
-        center: Point(
-          coordinates: Position(centerLng, centerLat),
-        ),
-        zoom: 13.0,
+        center: Point(coordinates: Position(centerLng, centerLat)),
+        zoom: 14.0,
       ),
       styleUri: MapboxStyles.MAPBOX_STREETS,
       textureView: true,
@@ -75,7 +69,6 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
       // Registrar iconos personalizados en el mapa
       final riderIcon = await MapIconHelper.createRiderIcon();
       final pickupIcon = await MapIconHelper.createPickupIcon();
-      final deliveryIcon = await MapIconHelper.createDeliveryIcon();
 
       await _mapboxMap!.style.addStyleImage(
         MapIconHelper.riderIconId,
@@ -95,15 +88,6 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
         [],
         null,
       );
-      await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.deliveryIconId,
-        1.0,
-        deliveryIcon,
-        false,
-        [],
-        [],
-        null,
-      );
 
       _iconsRegistered = true;
     } catch (e) {
@@ -114,21 +98,11 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   Future<void> _updateMarkers() async {
     if (_mapboxMap == null || _annotationManager == null) return;
 
-    // Limpiar marcadores existentes
-    if (_riderMarker != null) {
-      await _annotationManager!.delete(_riderMarker!);
-      _riderMarker = null;
-    }
-    if (_pickupMarker != null) {
-      await _annotationManager!.delete(_pickupMarker!);
-      _pickupMarker = null;
-    }
-    if (_deliveryMarker != null) {
-      await _annotationManager!.delete(_deliveryMarker!);
-      _deliveryMarker = null;
-    }
+    _riderMarker?.let((marker) => _annotationManager!.delete(marker));
+    _pickupMarker?.let((marker) => _annotationManager!.delete(marker));
+    _riderMarker = null;
+    _pickupMarker = null;
 
-    // Recrear marcadores
     await _addMarkers();
     await _fitBounds();
   }
@@ -136,46 +110,22 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   Future<void> _addMarkers() async {
     if (_mapboxMap == null || _annotationManager == null || !_iconsRegistered) return;
 
-    // Marcador del rider (si está disponible)
+    // Marcador del rider (tu ubicación)
     if (widget.riderLat != null && widget.riderLng != null) {
       _riderMarker = await _annotationManager!.create(
         PointAnnotationOptions(
-          geometry: Point(
-            coordinates: Position(
-              widget.riderLng!,
-              widget.riderLat!,
-            ),
-          ),
+          geometry: Point(coordinates: Position(widget.riderLng!, widget.riderLat!)),
           iconImage: MapIconHelper.riderIconId,
           iconSize: 1.0,
         ),
       );
     }
 
-    // Marcador del pickup (store)
+    // Marcador del pickup (restaurante/tienda)
     _pickupMarker = await _annotationManager!.create(
       PointAnnotationOptions(
-        geometry: Point(
-          coordinates: Position(
-            widget.order.pickupLng,
-            widget.order.pickupLat,
-          ),
-        ),
+        geometry: Point(coordinates: Position(widget.order.pickupLng, widget.order.pickupLat)),
         iconImage: MapIconHelper.pickupIconId,
-        iconSize: 1.0,
-      ),
-    );
-
-    // Marcador del delivery (customer)
-    _deliveryMarker = await _annotationManager!.create(
-      PointAnnotationOptions(
-        geometry: Point(
-          coordinates: Position(
-            widget.order.deliveryLng,
-            widget.order.deliveryLat,
-          ),
-        ),
-        iconImage: MapIconHelper.deliveryIconId,
         iconSize: 1.0,
       ),
     );
@@ -184,18 +134,16 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   Future<void> _fitBounds() async {
     if (_mapboxMap == null) return;
 
-    // Crear lista de coordenadas a incluir en los bounds
     final List<Position> positions = [
       Position(widget.order.pickupLng, widget.order.pickupLat),
-      Position(widget.order.deliveryLng, widget.order.deliveryLat),
     ];
 
-    // Añadir posición del rider si está disponible
     if (widget.riderLat != null && widget.riderLng != null) {
       positions.add(Position(widget.riderLng!, widget.riderLat!));
     }
 
-    // Calcular bounds mínimos y máximos
+    if (positions.length < 2) return;
+
     num minLng = positions.map((p) => p.lng).reduce((a, b) => a < b ? a : b);
     num maxLng = positions.map((p) => p.lng).reduce((a, b) => a > b ? a : b);
     num minLat = positions.map((p) => p.lat).reduce((a, b) => a < b ? a : b);
@@ -209,13 +157,17 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
 
     final camera = await _mapboxMap!.cameraForCoordinateBounds(
       bounds,
-      MbxEdgeInsets(top: 50, left: 50, bottom: 50, right: 50),
-      null,
-      null,
-      null,
-      null,
+      MbxEdgeInsets(top: 80, left: 60, bottom: 80, right: 60),
+      null, null, null, null,
     );
 
     await _mapboxMap!.flyTo(camera, MapAnimationOptions(duration: 1000));
+  }
+}
+
+extension _OptionExtension<T> on T? {
+  void let(void Function(T) block) {
+    final self = this;
+    if (self != null) block(self);
   }
 }

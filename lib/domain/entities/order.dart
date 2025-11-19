@@ -14,8 +14,10 @@ class Order {
   final double deliveryLng;
   final List<OrderItem> items;
   final double totalAmount;
-  final double? estimatedDistanceKm;
-  final int? estimatedDurationMin;
+  final double? estimatedDistanceKm; // Distancia total del delivery (pickup → customer)
+  final int? estimatedDurationMin; // Duración estimada del delivery
+  final double? distanceToPickupKm; // Distancia del rider al pickup (calculada en backend)
+  final int? durationToPickupMin; // Duración estimada del rider al pickup
   final String? providerName;
   final DateTime createdAt;
   final DateTime? assignedAt;
@@ -41,6 +43,8 @@ class Order {
     required this.totalAmount,
     this.estimatedDistanceKm,
     this.estimatedDurationMin,
+    this.distanceToPickupKm,
+    this.durationToPickupMin,
     this.providerName,
     required this.createdAt,
     this.assignedAt,
@@ -68,6 +72,8 @@ class Order {
       totalAmount: (json['total_amount'] as num).toDouble(),
       estimatedDistanceKm: json['estimated_distance_km']?.toDouble(),
       estimatedDurationMin: json['estimated_duration_min'],
+      distanceToPickupKm: json['distance_to_pickup_km']?.toDouble(),
+      durationToPickupMin: json['duration_to_pickup_min'],
       providerName: json['provider_name'],
       createdAt: DateTime.parse(json['created_at']),
       assignedAt: json['assigned_at'] != null ? DateTime.parse(json['assigned_at']) : null,

@@ -11,15 +11,27 @@ import '../presentation/order/screens/order_history_screen.dart';
 import '../presentation/settings/screens/settings_screen.dart';
 import '../presentation/auth/providers/auth_provider.dart';
 
+// Flag para controlar si es el primer arranque de la app
+class IsInitialBootNotifier extends Notifier<bool> {
+  @override
+  bool build() => true;
+
+  void markAsNotInitial() => state = false;
+}
+
+final isInitialBootProvider = NotifierProvider<IsInitialBootNotifier, bool>(
+  () => IsInitialBootNotifier(),
+);
+
 final appRouterProvider = Provider<GoRouter>((ref) {
   final authState = ref.watch(authStateProvider);
   final authRepository = ref.watch(authRepositoryProvider);
+  final isInitialBoot = ref.watch(isInitialBootProvider);
 
   return GoRouter(
     initialLocation: '/splash',
     refreshListenable: GoRouterRefreshStream(authRepository.authStateChanges),
     redirect: (context, state) {
-      final isAuthLoading = authState.isLoading;
       final session = authState.value?.session;
       final isAuthenticated = session != null;
 
@@ -27,13 +39,14 @@ final appRouterProvider = Provider<GoRouter>((ref) {
       final isGoingToSplash = state.matchedLocation == '/splash';
       final isGoingToForgotPassword = state.matchedLocation == '/forgot-password';
 
+      // SIEMPRE permitir splash en el primer arranque
+      if (isInitialBoot && isGoingToSplash) {
+        return null;
+      }
+
       // Si NO está autenticado (incluso si está loading), redirigir a login
       // Esto previene que logout → splash (queremos logout → login directo)
       if (!isAuthenticated && !isGoingToLogin && !isGoingToForgotPassword) {
-        // EXCEPCIÓN: Si está en splash y cargando, permitir (primera carga de app)
-        if (isGoingToSplash && isAuthLoading) {
-          return null;
-        }
         return '/login';
       }
 

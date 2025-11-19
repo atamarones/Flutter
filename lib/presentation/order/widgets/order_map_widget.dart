@@ -1,8 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../domain/entities/order.dart';
-import '../../../core/utils/map_icon_helper.dart';
 
 class OrderMapWidget extends ConsumerStatefulWidget {
   final Order order;
@@ -27,6 +28,11 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   PointAnnotation? _pickupMarker;
   PointAnnotation? _deliveryMarker;
   bool _iconsRegistered = false;
+
+  // IDs de los iconos
+  static const String _riderIconId = 'rider-icon';
+  static const String _pickupIconId = 'pickup-icon';
+  static const String _deliveryIconId = 'delivery-icon';
 
   @override
   void didUpdateWidget(OrderMapWidget oldWidget) {
@@ -61,44 +67,67 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   }
 
   void _onMapCreated(MapboxMap mapboxMap) async {
+    if (!mounted) return;
     _mapboxMap = mapboxMap;
-    _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
-    await _registerIcons();
-    await _addMarkers();
-    await _fitBounds();
+
+    try {
+      _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+      await _registerIcons();
+      await _addMarkers();
+      await _fitBounds();
+    } catch (e) {
+      debugPrint('Error initializing map: $e');
+    }
   }
 
   Future<void> _registerIcons() async {
     if (_mapboxMap == null || _iconsRegistered) return;
 
     try {
-      // Registrar iconos personalizados en el mapa
-      final riderIcon = await MapIconHelper.createRiderIcon();
-      final pickupIcon = await MapIconHelper.createPickupIcon();
-      final deliveryIcon = await MapIconHelper.createDeliveryIcon();
+      // Cargar iconos desde assets
+      final riderBytes = await rootBundle.load('assets/icons/rider_marker.png');
+      final pickupBytes = await rootBundle.load('assets/icons/pickup_marker.png');
+      final deliveryBytes = await rootBundle.load('assets/icons/delivery_marker.png');
 
+      final riderImage = MbxImage(
+        width: 96,
+        height: 96,
+        data: riderBytes.buffer.asUint8List(),
+      );
+      final pickupImage = MbxImage(
+        width: 96,
+        height: 96,
+        data: pickupBytes.buffer.asUint8List(),
+      );
+      final deliveryImage = MbxImage(
+        width: 96,
+        height: 96,
+        data: deliveryBytes.buffer.asUint8List(),
+      );
+
+      // Registrar iconos en el mapa
       await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.riderIconId,
+        _riderIconId,
         1.0,
-        riderIcon,
+        riderImage,
         false,
         [],
         [],
         null,
       );
       await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.pickupIconId,
+        _pickupIconId,
         1.0,
-        pickupIcon,
+        pickupImage,
         false,
         [],
         [],
         null,
       );
       await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.deliveryIconId,
+        _deliveryIconId,
         1.0,
-        deliveryIcon,
+        deliveryImage,
         false,
         [],
         [],
@@ -146,8 +175,8 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
               widget.riderLat!,
             ),
           ),
-          iconImage: MapIconHelper.riderIconId,
-          iconSize: 1.0,
+          iconImage: _riderIconId,
+          iconSize: 0.5,
         ),
       );
     }
@@ -161,8 +190,8 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
             widget.order.pickupLat,
           ),
         ),
-        iconImage: MapIconHelper.pickupIconId,
-        iconSize: 1.0,
+        iconImage: _pickupIconId,
+        iconSize: 0.5,
       ),
     );
 
@@ -175,8 +204,8 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
             widget.order.deliveryLat,
           ),
         ),
-        iconImage: MapIconHelper.deliveryIconId,
-        iconSize: 1.0,
+        iconImage: _deliveryIconId,
+        iconSize: 0.5,
       ),
     );
   }

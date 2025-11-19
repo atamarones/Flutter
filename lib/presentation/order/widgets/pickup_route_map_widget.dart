@@ -1,8 +1,9 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../domain/entities/order.dart';
-import '../../../core/utils/map_icon_helper.dart';
 
 /// Mapa que muestra SOLO rider y punto de pickup
 /// Usado cuando rider va camino a recoger el pedido
@@ -28,6 +29,10 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   PointAnnotation? _riderMarker;
   PointAnnotation? _pickupMarker;
   bool _iconsRegistered = false;
+
+  // IDs de los iconos
+  static const String _riderIconId = 'rider-icon';
+  static const String _pickupIconId = 'pickup-icon';
 
   @override
   void didUpdateWidget(PickupRouteMapWidget oldWidget) {
@@ -55,34 +60,52 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   }
 
   void _onMapCreated(MapboxMap mapboxMap) async {
+    if (!mounted) return;
     _mapboxMap = mapboxMap;
-    _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
-    await _registerIcons();
-    await _addMarkers();
-    await _fitBounds();
+
+    try {
+      _annotationManager = await _mapboxMap!.annotations.createPointAnnotationManager();
+      await _registerIcons();
+      await _addMarkers();
+      await _fitBounds();
+    } catch (e) {
+      debugPrint('Error initializing map: $e');
+    }
   }
 
   Future<void> _registerIcons() async {
     if (_mapboxMap == null || _iconsRegistered) return;
 
     try {
-      // Registrar iconos personalizados en el mapa
-      final riderIcon = await MapIconHelper.createRiderIcon();
-      final pickupIcon = await MapIconHelper.createPickupIcon();
+      // Cargar iconos desde assets
+      final riderBytes = await rootBundle.load('assets/icons/rider_marker.png');
+      final pickupBytes = await rootBundle.load('assets/icons/pickup_marker.png');
 
+      final riderImage = MbxImage(
+        width: 96,
+        height: 96,
+        data: riderBytes.buffer.asUint8List(),
+      );
+      final pickupImage = MbxImage(
+        width: 96,
+        height: 96,
+        data: pickupBytes.buffer.asUint8List(),
+      );
+
+      // Registrar iconos en el mapa
       await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.riderIconId,
+        _riderIconId,
         1.0,
-        riderIcon,
+        riderImage,
         false,
         [],
         [],
         null,
       );
       await _mapboxMap!.style.addStyleImage(
-        MapIconHelper.pickupIconId,
+        _pickupIconId,
         1.0,
-        pickupIcon,
+        pickupImage,
         false,
         [],
         [],
@@ -115,8 +138,8 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
       _riderMarker = await _annotationManager!.create(
         PointAnnotationOptions(
           geometry: Point(coordinates: Position(widget.riderLng!, widget.riderLat!)),
-          iconImage: MapIconHelper.riderIconId,
-          iconSize: 1.0,
+          iconImage: _riderIconId,
+          iconSize: 0.5,
         ),
       );
     }
@@ -125,8 +148,8 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
     _pickupMarker = await _annotationManager!.create(
       PointAnnotationOptions(
         geometry: Point(coordinates: Position(widget.order.pickupLng, widget.order.pickupLat)),
-        iconImage: MapIconHelper.pickupIconId,
-        iconSize: 1.0,
+        iconImage: _pickupIconId,
+        iconSize: 0.5,
       ),
     );
   }

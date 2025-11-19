@@ -69,5 +69,33 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Para abrir Google Maps -->
+        <package android:name="com.google.android.apps.maps" />
+        <!-- Para abrir Waze -->
+        <package android:name="com.waze" />
+        <!-- Para abrir WhatsApp -->
+        <package android:name="com.whatsapp" />
+        <!-- Intent para llamadas telefónicas -->
+        <intent>
+            <action android:name="android.intent.action.DIAL" />
+            <data android:scheme="tel" />
+        </intent>
+        <!-- Intent para navegación -->
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="google.navigation" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="waze" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="whatsapp" />
+        </intent>
     </queries>
 </manifest>

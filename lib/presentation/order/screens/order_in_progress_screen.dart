@@ -147,6 +147,15 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
                                     ),
                                   ),
                                   const SizedBox(height: 4),
+                                  Text(
+                                    'Pedido #${widget.order.orderNumber}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      color: Colors.grey[700],
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
                                   if (isGoingToPickup && widget.order.durationToPickupMin != null)
                                     Text(
                                       '~${widget.order.durationToPickupMin} min',
@@ -574,28 +583,79 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
   }
 
   Future<void> _openNavigation() async {
-    final settings = ref.read(settingsProvider);
-    final isGoingToPickup = widget.order.status == OrderStatus.accepted;
+    try {
+      final settings = ref.read(settingsProvider);
+      final isGoingToPickup = widget.order.status == OrderStatus.accepted;
 
-    final lat = isGoingToPickup ? widget.order.pickupLat : widget.order.deliveryLat;
-    final lng = isGoingToPickup ? widget.order.pickupLng : widget.order.deliveryLng;
+      final lat = isGoingToPickup ? widget.order.pickupLat : widget.order.deliveryLat;
+      final lng = isGoingToPickup ? widget.order.pickupLng : widget.order.deliveryLng;
 
-    final url = switch (settings.navigationMethod) {
-      NavigationMethod.googleMaps => Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng'),
-      NavigationMethod.waze => Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes'),
-      NavigationMethod.appleMaps => Uri.parse('https://maps.apple.com/?daddr=$lat,$lng'),
-    };
+      // Primero intentar con URL de app nativa, luego fallback a web
+      Uri? appUrl;
+      Uri webUrl;
 
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      switch (settings.navigationMethod) {
+        case NavigationMethod.googleMaps:
+          appUrl = Uri.parse('google.navigation:q=$lat,$lng&mode=d');
+          webUrl = Uri.parse('https://www.google.com/maps/dir/?api=1&destination=$lat,$lng');
+          break;
+        case NavigationMethod.waze:
+          appUrl = Uri.parse('waze://?ll=$lat,$lng&navigate=yes');
+          webUrl = Uri.parse('https://waze.com/ul?ll=$lat,$lng&navigate=yes');
+          break;
+        case NavigationMethod.appleMaps:
+          appUrl = Uri.parse('maps://?daddr=$lat,$lng');
+          webUrl = Uri.parse('https://maps.apple.com/?daddr=$lat,$lng');
+          break;
+      }
+
+      // Intentar abrir app nativa primero
+      bool launched = false;
+      if (appUrl != null && await canLaunchUrl(appUrl)) {
+        launched = await launchUrl(appUrl, mode: LaunchMode.externalApplication);
+      }
+
+      // Si falla, intentar con URL web
+      if (!launched && await canLaunchUrl(webUrl)) {
+        await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+      }
+    } catch (e) {
+      debugPrint('Error opening navigation: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir la navegación')),
+        );
+      }
     }
   }
 
   Future<void> _openWhatsAppSupport() async {
-    final url = Uri.parse('https://wa.me/${AppConstants.supportWhatsAppNumber.replaceAll('+', '')}?text=Hola, necesito ayuda con mi pedido ${widget.order.orderNumber}');
+    try {
+      final phoneNumber = AppConstants.supportWhatsAppNumber.replaceAll('+', '').replaceAll(' ', '');
+      final message = Uri.encodeComponent('Hola, necesito ayuda con mi pedido ${widget.order.orderNumber}');
 
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url, mode: LaunchMode.externalApplication);
+      // Intentar primero con URL de app de WhatsApp
+      final whatsappUrl = Uri.parse('whatsapp://send?phone=$phoneNumber&text=$message');
+
+      bool launched = false;
+      if (await canLaunchUrl(whatsappUrl)) {
+        launched = await launchUrl(whatsappUrl, mode: LaunchMode.externalApplication);
+      }
+
+      // Si falla, intentar con URL web de WhatsApp
+      if (!launched) {
+        final webUrl = Uri.parse('https://wa.me/$phoneNumber?text=$message');
+        if (await canLaunchUrl(webUrl)) {
+          await launchUrl(webUrl, mode: LaunchMode.externalApplication);
+        }
+      }
+    } catch (e) {
+      debugPrint('Error opening WhatsApp: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No se pudo abrir WhatsApp')),
+        );
+      }
     }
   }
 

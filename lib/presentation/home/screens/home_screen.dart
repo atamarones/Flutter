@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../order/widgets/order_assigned_dialog.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/theme/app_colors.dart';
@@ -28,12 +29,39 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   void initState() {
     super.initState();
     _initializeSession();
+    _enableWakelock();
+  }
+
+  @override
+  void dispose() {
+    _disableWakelock();
+    super.dispose();
   }
 
   Future<void> _initializeSession() async {
     final session = SupabaseService.client.auth.currentSession;
     if (session != null) {
       await ForegroundTrackingService.saveToken(session.accessToken);
+    }
+  }
+
+  /// Mantener pantalla encendida mientras el rider está en la app
+  Future<void> _enableWakelock() async {
+    try {
+      await WakelockPlus.enable();
+      debugPrint('🔆 Wakelock enabled - Pantalla se mantendrá encendida');
+    } catch (e) {
+      debugPrint('Error enabling wakelock: $e');
+    }
+  }
+
+  /// Permitir que la pantalla se apague cuando se salga de la app
+  Future<void> _disableWakelock() async {
+    try {
+      await WakelockPlus.disable();
+      debugPrint('🌙 Wakelock disabled - Pantalla puede apagarse');
+    } catch (e) {
+      debugPrint('Error disabling wakelock: $e');
     }
   }
 

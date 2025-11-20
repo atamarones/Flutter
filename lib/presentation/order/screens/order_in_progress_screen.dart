@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:wakelock_plus/wakelock_plus.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/order.dart';
@@ -10,27 +11,92 @@ import '../providers/order_provider.dart';
 import '../../settings/providers/settings_provider.dart';
 import '../widgets/pickup_route_map_widget.dart';
 
-class OrderInProgressScreen extends ConsumerWidget {
+class OrderInProgressScreen extends ConsumerStatefulWidget {
   const OrderInProgressScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final orderState = ref.watch(activeOrderProvider);
+  ConsumerState<OrderInProgressScreen> createState() => _OrderInProgressScreenState();
+}
 
-    return orderState.when(
-      data: (order) {
-        if (order == null) return const SizedBox();
-        return _OrderContent(order: order);
-      },
-      loading: () => const Scaffold(body: Center(child: CircularProgressIndicator())),
-      error: (e, _) => Scaffold(body: Center(child: Text('Error: $e'))),
+class _OrderInProgressScreenState extends ConsumerState<OrderInProgressScreen> {
+  @override
+  Widget build(BuildContext context) {
+    // Usar select para solo escuchar cambios en el ID y status de la orden
+    // Esto evita rebuilds cuando cambian otros campos irrelevantes
+    final order = ref.watch(
+      activeOrderProvider.select((state) => state.value),
+    );
+
+    if (order == null) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+
+    // Usar key basada solo en el ID de la orden, NO en el status
+    // Esto evita reconstrucciones cuando cambia el status
+    return _OrderContent(
+      key: ValueKey('order_content_${order.id}'),
+      order: order,
+    );
+  }
+}
+
+/// Widget separado para el mapa que SOLO se actualiza cuando cambia el status de la orden
+class _OrderMapView extends ConsumerStatefulWidget {
+  final Order order;
+
+  const _OrderMapView({required this.order});
+
+  @override
+  ConsumerState<_OrderMapView> createState() => _OrderMapViewState();
+}
+
+class _OrderMapViewState extends ConsumerState<_OrderMapView> {
+  double? _riderLat;
+  double? _riderLng;
+  OrderStatus? _lastStatus;
+
+  @override
+  void initState() {
+    super.initState();
+    _updateRiderPosition();
+    _lastStatus = widget.order.status;
+  }
+
+  @override
+  void didUpdateWidget(_OrderMapView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // SOLO actualizar la posición del rider cuando cambia el status de la orden
+    if (widget.order.status != _lastStatus) {
+      _updateRiderPosition();
+      _lastStatus = widget.order.status;
+    }
+  }
+
+  void _updateRiderPosition() {
+    // Capturar la posición actual del rider en este momento (sin escuchar cambios)
+    final rider = ref.read(riderStateProvider).value;
+    setState(() {
+      _riderLat = rider?.currentLat;
+      _riderLng = rider?.currentLng;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return PickupRouteMapWidget(
+      // Key basada solo en el ID de la orden (NO en el status)
+      // El mapa muestra la foto actual del rider en cada cambio de estado
+      key: ValueKey('map_${widget.order.id}'),
+      order: widget.order,
+      riderLat: _riderLat,
+      riderLng: _riderLng,
     );
   }
 }
 
 class _OrderContent extends ConsumerStatefulWidget {
   final Order order;
-  const _OrderContent({required this.order});
+  const _OrderContent({super.key, required this.order});
 
   @override
   ConsumerState<_OrderContent> createState() => _OrderContentState();
@@ -44,6 +110,41 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
   void initState() {
     super.initState();
     _checkDistance();
+    _enableWakelock();
+  }
+
+  @override
+  void dispose() {
+    _disableWakelock();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(_OrderContent oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Solo recalcular distancia si cambió el status de la orden
+    if (oldWidget.order.status != widget.order.status) {
+      _checkDistance();
+    }
+  }
+
+  /// Mantener pantalla encendida durante el flujo de la orden
+  Future<void> _enableWakelock() async {
+    try {
+      await WakelockPlus.enable();
+      debugPrint('🔆 [ORDER] Wakelock enabled - Pantalla encendida durante orden');
+    } catch (e) {
+      debugPrint('Error enabling wakelock: $e');
+    }
+  }
+
+  Future<void> _disableWakelock() async {
+    try {
+      await WakelockPlus.disable();
+      debugPrint('🌙 [ORDER] Wakelock disabled');
+    } catch (e) {
+      debugPrint('Error disabling wakelock: $e');
+    }
   }
 
   Future<void> _checkDistance() async {
@@ -77,7 +178,6 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
 
   @override
   Widget build(BuildContext context) {
-    final riderAsync = ref.watch(riderStateProvider);
     final isGoingToPickup = widget.order.status == OrderStatus.accepted;
 
     return PopScope(
@@ -89,21 +189,13 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
       child: Scaffold(
       body: Stack(
         children: [
-          // MAPA (40% superior)
+          // MAPA (40% superior) - Muestra rider y destino sin refrescar
           Positioned(
             top: 0,
             left: 0,
             right: 0,
             height: MediaQuery.of(context).size.height * 0.4,
-            child: riderAsync.when(
-              data: (rider) => PickupRouteMapWidget(
-                order: widget.order,
-                riderLat: rider?.currentLat,
-                riderLng: rider?.currentLng,
-              ),
-              loading: () => const Center(child: CircularProgressIndicator()),
-              error: (_, __) => const Center(child: Icon(Icons.error)),
-            ),
+            child: _OrderMapView(order: widget.order),
           ),
 
           // CONTENIDO (60% inferior)

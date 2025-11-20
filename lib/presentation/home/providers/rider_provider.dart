@@ -102,18 +102,28 @@ class RiderStateNotifier extends AsyncNotifier<Rider?> {
 
       return rider;
     } catch (e) {
-      // Solo loguear errores que no sean de conexión
-      if (!e.toString().contains('SocketException') &&
-          !e.toString().contains('Failed host lookup')) {
-        AppLogger.error('[RIDER_PROVIDER] Error cargando rider', error: e);
+      final errorString = e.toString();
+      final isNetworkError = errorString.contains('SocketException') ||
+          errorString.contains('Failed host lookup') ||
+          errorString.contains('ClientException');
+
+      if (isNetworkError) {
+        AppLogger.warning('[RIDER_PROVIDER] Error de red al cargar rider');
+
+        // Si ya tenemos datos previos, mantenerlos
+        if (state.value != null) {
+          AppLogger.info('[RIDER_PROVIDER] Manteniendo datos en caché durante error de red');
+          return state.value;
+        }
+
+        // Si es el primer intento, lanzar error de red más amigable
+        AppLogger.warning('[RIDER_PROVIDER] Sin conexión en primer intento de carga');
+        throw Exception('Sin conexión a internet.\n\nPor favor, verifica tu conexión y vuelve a intentar.');
       }
-      // Si es el primer intento de carga (no hay estado previo), propagar el error
-      if (state.value == null) {
-        rethrow;
-      }
-      // Si hay error de red y ya tenemos datos, mantener el estado actual del rider
-      AppLogger.warning('[RIDER_PROVIDER] Error de red, manteniendo estado actual');
-      return state.value;
+
+      // Error que no es de red (datos no encontrados, etc.)
+      AppLogger.error('[RIDER_PROVIDER] Error cargando rider', error: e);
+      rethrow;
     }
   }
 

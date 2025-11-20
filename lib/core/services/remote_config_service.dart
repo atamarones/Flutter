@@ -4,7 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 
 class RemoteConfigService {
-  static const String _configUrl = 'https://aima-n8n.yau1cn.easypanel.host/webhook/app-config-rider';
+  static const String _configUrl = 'https://n8n.urbangoapp.com/webhook/app-config-rider';
   static const String _cacheKey = 'remote_config_cache';
   static const Duration _cacheDuration = Duration(hours: 1);
 
@@ -16,9 +16,30 @@ class RemoteConfigService {
   Map<String, dynamic> _config = {};
   DateTime? _lastFetch;
 
-  /// Obtener valor de configuración
+  /// Obtener valor de configuración con conversión automática de tipos
   T? getValue<T>(String key, {T? defaultValue}) {
-    return _config[key] as T? ?? defaultValue;
+    final value = _config[key];
+
+    if (value == null) return defaultValue;
+
+    // Manejar conversiones de tipo comunes
+    if (T == double) {
+      if (value is int) return value.toDouble() as T;
+      if (value is double) return value as T;
+      if (value is String) return double.tryParse(value) as T?;
+    } else if (T == int) {
+      if (value is int) return value as T;
+      if (value is double) return value.toInt() as T;
+      if (value is String) return int.tryParse(value) as T?;
+    }
+
+    // Cast directo para otros tipos
+    try {
+      return value as T;
+    } catch (e) {
+      debugPrint('Error casting $key: $value (${value.runtimeType}) to $T, using default: $defaultValue');
+      return defaultValue;
+    }
   }
 
   /// Inicializar y cargar configuración remota

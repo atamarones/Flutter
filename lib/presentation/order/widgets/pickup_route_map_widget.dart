@@ -30,6 +30,7 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   PointAnnotation? _riderMarker;
   PointAnnotation? _destinationMarker;
   bool _iconsRegistered = false;
+  OrderStatus? _lastOrderStatus;
 
   // IDs de los iconos
   static const String _riderIconId = 'rider-icon';
@@ -39,8 +40,17 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   @override
   void didUpdateWidget(PickupRouteMapWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.riderLat != oldWidget.riderLat || widget.riderLng != oldWidget.riderLng) {
-      _updateMarkers();
+    // SOLO actualizar si cambió el estado de la orden (de accepted a in_progress)
+    // O si cambió la posición del rider (cuando se captura nueva foto en cambio de estado)
+    final hasStatusChanged = widget.order.status != oldWidget.order.status;
+    final hasRiderPositionChanged =
+      widget.riderLat != oldWidget.riderLat ||
+      widget.riderLng != oldWidget.riderLng;
+
+    if (hasStatusChanged) {
+      _updateAllMarkers();
+    } else if (hasRiderPositionChanged) {
+      _updateRiderMarker();
     }
   }
 
@@ -53,7 +63,6 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
     final centerLng = widget.riderLng ?? destLng;
 
     return MapWidget(
-      key: ValueKey('pickup_route_map_${widget.order.id}_${widget.order.status}'),
       cameraOptions: CameraOptions(
         center: Point(coordinates: Position(centerLng, centerLat)),
         zoom: 14.0,
@@ -157,32 +166,85 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
     }
   }
 
-  Future<void> _updateMarkers() async {
-    if (_mapboxMap == null || _annotationManager == null) return;
+  /// Actualiza la posición del rider sin cambiar el destino
+  Future<void> _updateRiderMarker() async {
+    if (_mapboxMap == null || _annotationManager == null || !_iconsRegistered) return;
+    if (widget.riderLat == null || widget.riderLng == null) return;
 
-    // Limpiar marcadores existentes de forma segura
     try {
+      // Eliminar marcador anterior del rider si existe
       if (_riderMarker != null) {
         await _annotationManager!.delete(_riderMarker!);
-        _riderMarker = null;
       }
+
+      // Crear nuevo marcador del rider con la posición actualizada
+      _riderMarker = await _annotationManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(widget.riderLng!, widget.riderLat!)),
+          iconImage: _riderIconId,
+          iconSize: 0.5,
+        ),
+      );
+
+      // Reajustar vista del mapa para mostrar ambos puntos
+      await _fitBounds();
     } catch (e) {
-      debugPrint('Error deleting rider marker: $e');
-      _riderMarker = null;
+      debugPrint('Error updating rider marker: $e');
     }
+  }
+
+  /// Actualiza AMBOS marcadores (rider + destino) cuando cambia el status de la orden
+  Future<void> _updateAllMarkers() async {
+    if (_mapboxMap == null || _annotationManager == null || !_iconsRegistered) return;
+
+    final isGoingToPickup = widget.order.status == OrderStatus.accepted;
 
     try {
+      // 1. Actualizar marcador del RIDER con la nueva posición capturada
+      if (widget.riderLat != null && widget.riderLng != null) {
+        if (_riderMarker != null) {
+          await _annotationManager!.delete(_riderMarker!);
+        }
+        _riderMarker = await _annotationManager!.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(widget.riderLng!, widget.riderLat!)),
+            iconImage: _riderIconId,
+            iconSize: 0.5,
+          ),
+        );
+      }
+
+      // 2. Actualizar marcador del DESTINO según el nuevo estado
       if (_destinationMarker != null) {
         await _annotationManager!.delete(_destinationMarker!);
         _destinationMarker = null;
       }
-    } catch (e) {
-      debugPrint('Error deleting destination marker: $e');
-      _destinationMarker = null;
-    }
 
-    await _addMarkers();
-    await _fitBounds();
+      if (isGoingToPickup) {
+        _destinationMarker = await _annotationManager!.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(widget.order.pickupLng, widget.order.pickupLat)),
+            iconImage: _pickupIconId,
+            iconSize: 0.5,
+          ),
+        );
+      } else {
+        _destinationMarker = await _annotationManager!.create(
+          PointAnnotationOptions(
+            geometry: Point(coordinates: Position(widget.order.deliveryLng, widget.order.deliveryLat)),
+            iconImage: _deliveryIconId,
+            iconSize: 0.5,
+          ),
+        );
+      }
+
+      _lastOrderStatus = widget.order.status;
+
+      // Reajustar vista del mapa para mostrar ambos puntos
+      await _fitBounds();
+    } catch (e) {
+      debugPrint('Error updating markers: $e');
+    }
   }
 
   Future<void> _addMarkers() async {
@@ -219,6 +281,9 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
         ),
       );
     }
+
+    // Guardar el estado inicial
+    _lastOrderStatus = widget.order.status;
   }
 
   Future<void> _fitBounds() async {

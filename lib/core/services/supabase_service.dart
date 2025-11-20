@@ -7,13 +7,20 @@ class SupabaseService {
   static bool _isClearing = false; // Prevenir loop infinito
 
   static Future<void> initialize() async {
-    await Supabase.initialize(
-      url: AppConstants.supabaseUrl,
-      anonKey: AppConstants.supabaseAnonKey,
-      authOptions: const FlutterAuthClientOptions(
-        authFlowType: AuthFlowType.pkce,
-      ),
-    );
+    try {
+      await Supabase.initialize(
+        url: AppConstants.supabaseUrl,
+        anonKey: AppConstants.supabaseAnonKey,
+        authOptions: const FlutterAuthClientOptions(
+          authFlowType: AuthFlowType.pkce,
+        ),
+      );
+    } catch (e) {
+      // Capturar errores de inicialización (tokens expirados, etc.)
+      // Esto es normal cuando la app se reinicia con tokens expirados
+      AppLogger.warning('[SUPABASE] Error durante inicialización (token expirado): $e');
+      // Continuar con la inicialización - el usuario simplemente verá el login
+    }
 
     // Auto-recovery de tokens corruptos (PROFESIONAL)
     await _handleSessionRecovery();

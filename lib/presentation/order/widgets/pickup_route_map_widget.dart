@@ -1,12 +1,13 @@
-import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import '../../../domain/entities/order.dart';
 
-/// Mapa que muestra SOLO rider y punto de pickup
-/// Usado cuando rider va camino a recoger el pedido
+/// Mapa que muestra rider y el destino según el estado de la orden:
+/// - Si está ACCEPTED: muestra rider + pickup (va a recoger)
+/// - Si está IN_PROGRESS: muestra rider + delivery (va a entregar)
 class PickupRouteMapWidget extends ConsumerStatefulWidget {
   final Order order;
   final double? riderLat;
@@ -27,12 +28,13 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   MapboxMap? _mapboxMap;
   PointAnnotationManager? _annotationManager;
   PointAnnotation? _riderMarker;
-  PointAnnotation? _pickupMarker;
+  PointAnnotation? _destinationMarker;
   bool _iconsRegistered = false;
 
   // IDs de los iconos
   static const String _riderIconId = 'rider-icon';
   static const String _pickupIconId = 'pickup-icon';
+  static const String _deliveryIconId = 'delivery-icon';
 
   @override
   void didUpdateWidget(PickupRouteMapWidget oldWidget) {
@@ -44,11 +46,14 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
 
   @override
   Widget build(BuildContext context) {
-    final centerLat = widget.riderLat ?? widget.order.pickupLat;
-    final centerLng = widget.riderLng ?? widget.order.pickupLng;
+    final isGoingToPickup = widget.order.status == OrderStatus.accepted;
+    final destLat = isGoingToPickup ? widget.order.pickupLat : widget.order.deliveryLat;
+    final destLng = isGoingToPickup ? widget.order.pickupLng : widget.order.deliveryLng;
+    final centerLat = widget.riderLat ?? destLat;
+    final centerLng = widget.riderLng ?? destLng;
 
     return MapWidget(
-      key: ValueKey('pickup_route_map_${widget.order.id}'),
+      key: ValueKey('pickup_route_map_${widget.order.id}_${widget.order.status}'),
       cameraOptions: CameraOptions(
         center: Point(coordinates: Position(centerLng, centerLat)),
         zoom: 14.0,
@@ -77,26 +82,51 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
     if (_mapboxMap == null || _iconsRegistered) return;
 
     try {
-      // Cargar iconos desde assets
+      // Cargar iconos desde assets como ByteData
       final riderBytes = await rootBundle.load('assets/icons/rider_marker.png');
       final pickupBytes = await rootBundle.load('assets/icons/pickup_marker.png');
+      final deliveryBytes = await rootBundle.load('assets/icons/delivery_marker.png');
 
-      final riderImage = MbxImage(
-        width: 96,
-        height: 96,
-        data: riderBytes.buffer.asUint8List(),
+      // Decodificar imágenes para obtener dimensiones reales
+      final riderCodec = await instantiateImageCodec(riderBytes.buffer.asUint8List());
+      final riderFrame = await riderCodec.getNextFrame();
+      final riderImage = riderFrame.image;
+
+      final pickupCodec = await instantiateImageCodec(pickupBytes.buffer.asUint8List());
+      final pickupFrame = await pickupCodec.getNextFrame();
+      final pickupImage = pickupFrame.image;
+
+      final deliveryCodec = await instantiateImageCodec(deliveryBytes.buffer.asUint8List());
+      final deliveryFrame = await deliveryCodec.getNextFrame();
+      final deliveryImage = deliveryFrame.image;
+
+      // Convertir a bytes en formato correcto
+      final riderData = await riderImage.toByteData(format: ImageByteFormat.png);
+      final pickupData = await pickupImage.toByteData(format: ImageByteFormat.png);
+      final deliveryData = await deliveryImage.toByteData(format: ImageByteFormat.png);
+
+      // Crear MbxImage con dimensiones reales
+      final riderMbx = MbxImage(
+        width: riderImage.width,
+        height: riderImage.height,
+        data: riderData!.buffer.asUint8List(),
       );
-      final pickupImage = MbxImage(
-        width: 96,
-        height: 96,
-        data: pickupBytes.buffer.asUint8List(),
+      final pickupMbx = MbxImage(
+        width: pickupImage.width,
+        height: pickupImage.height,
+        data: pickupData!.buffer.asUint8List(),
+      );
+      final deliveryMbx = MbxImage(
+        width: deliveryImage.width,
+        height: deliveryImage.height,
+        data: deliveryData!.buffer.asUint8List(),
       );
 
       // Registrar iconos en el mapa
       await _mapboxMap!.style.addStyleImage(
         _riderIconId,
         1.0,
-        riderImage,
+        riderMbx,
         false,
         [],
         [],
@@ -105,7 +135,16 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
       await _mapboxMap!.style.addStyleImage(
         _pickupIconId,
         1.0,
-        pickupImage,
+        pickupMbx,
+        false,
+        [],
+        [],
+        null,
+      );
+      await _mapboxMap!.style.addStyleImage(
+        _deliveryIconId,
+        1.0,
+        deliveryMbx,
         false,
         [],
         [],
@@ -121,10 +160,26 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   Future<void> _updateMarkers() async {
     if (_mapboxMap == null || _annotationManager == null) return;
 
-    _riderMarker?.let((marker) => _annotationManager!.delete(marker));
-    _pickupMarker?.let((marker) => _annotationManager!.delete(marker));
-    _riderMarker = null;
-    _pickupMarker = null;
+    // Limpiar marcadores existentes de forma segura
+    try {
+      if (_riderMarker != null) {
+        await _annotationManager!.delete(_riderMarker!);
+        _riderMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting rider marker: $e');
+      _riderMarker = null;
+    }
+
+    try {
+      if (_destinationMarker != null) {
+        await _annotationManager!.delete(_destinationMarker!);
+        _destinationMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting destination marker: $e');
+      _destinationMarker = null;
+    }
 
     await _addMarkers();
     await _fitBounds();
@@ -132,6 +187,8 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
 
   Future<void> _addMarkers() async {
     if (_mapboxMap == null || _annotationManager == null || !_iconsRegistered) return;
+
+    final isGoingToPickup = widget.order.status == OrderStatus.accepted;
 
     // Marcador del rider (tu ubicación)
     if (widget.riderLat != null && widget.riderLng != null) {
@@ -144,21 +201,35 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
       );
     }
 
-    // Marcador del pickup (restaurante/tienda)
-    _pickupMarker = await _annotationManager!.create(
-      PointAnnotationOptions(
-        geometry: Point(coordinates: Position(widget.order.pickupLng, widget.order.pickupLat)),
-        iconImage: _pickupIconId,
-        iconSize: 0.5,
-      ),
-    );
+    // Marcador del destino (pickup si va a recoger, delivery si va a entregar)
+    if (isGoingToPickup) {
+      _destinationMarker = await _annotationManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(widget.order.pickupLng, widget.order.pickupLat)),
+          iconImage: _pickupIconId,
+          iconSize: 0.5,
+        ),
+      );
+    } else {
+      _destinationMarker = await _annotationManager!.create(
+        PointAnnotationOptions(
+          geometry: Point(coordinates: Position(widget.order.deliveryLng, widget.order.deliveryLat)),
+          iconImage: _deliveryIconId,
+          iconSize: 0.5,
+        ),
+      );
+    }
   }
 
   Future<void> _fitBounds() async {
     if (_mapboxMap == null) return;
 
+    final isGoingToPickup = widget.order.status == OrderStatus.accepted;
+    final destLat = isGoingToPickup ? widget.order.pickupLat : widget.order.deliveryLat;
+    final destLng = isGoingToPickup ? widget.order.pickupLng : widget.order.deliveryLng;
+
     final List<Position> positions = [
-      Position(widget.order.pickupLng, widget.order.pickupLat),
+      Position(destLng, destLat),
     ];
 
     if (widget.riderLat != null && widget.riderLng != null) {
@@ -188,9 +259,3 @@ class _PickupRouteMapWidgetState extends ConsumerState<PickupRouteMapWidget> {
   }
 }
 
-extension _OptionExtension<T> on T? {
-  void let(void Function(T) block) {
-    final self = this;
-    if (self != null) block(self);
-  }
-}

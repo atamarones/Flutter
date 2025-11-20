@@ -1,7 +1,10 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:audioplayers/audioplayers.dart';
+import 'package:volume_controller/volume_controller.dart';
+import 'package:http/http.dart' as http;
 import '../../../core/theme/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../domain/entities/order.dart';
@@ -23,12 +26,15 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
   final _audioPlayer = AudioPlayer();
   int _countdown = AppConstants.orderTimeoutSeconds;
   Timer? _timer;
+  double _previousVolume = 0.0;
 
   @override
   void initState() {
     super.initState();
+    _setMaxVolume();
     _playNotificationSoundLoop();
     _startCountdown();
+    _startVolumeMonitoring();
   }
 
   void _startCountdown() {
@@ -38,9 +44,32 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
       } else {
         timer.cancel();
         _audioPlayer.stop();
+        _callNotTakenWebhook();
         if (mounted) Navigator.of(context).pop();
       }
     });
+  }
+
+  Future<void> _callNotTakenWebhook() async {
+    try {
+      final response = await http.post(
+        Uri.parse(AppConstants.notTakenReleaseOrderWebhook),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'order_id': widget.order.id,
+          'order_number': widget.order.orderNumber,
+          'rider_id': widget.order.riderId,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        debugPrint('Not taken webhook called successfully');
+      } else {
+        debugPrint('Not taken webhook failed: ${response.statusCode}');
+      }
+    } catch (e) {
+      debugPrint('Error calling not taken webhook: $e');
+    }
   }
 
   Future<void> _playNotificationSoundLoop() async {
@@ -59,11 +88,30 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
     }
   }
 
+  Future<void> _setMaxVolume() async {
+    try {
+      _previousVolume = await VolumeController().getVolume();
+      VolumeController().setVolume(1.0);
+    } catch (e) {
+      debugPrint('Error setting max volume: $e');
+    }
+  }
+
+  void _startVolumeMonitoring() {
+    VolumeController().listener((volume) {
+      if (volume < 1.0 && mounted) {
+        VolumeController().setVolume(1.0);
+      }
+    });
+  }
+
   @override
   void dispose() {
     _timer?.cancel();
     _audioPlayer.stop();
     _audioPlayer.dispose();
+    VolumeController().removeListener();
+    VolumeController().setVolume(_previousVolume);
     super.dispose();
   }
 
@@ -71,13 +119,19 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
   Widget build(BuildContext context) {
     final riderAsync = ref.watch(riderStateProvider);
 
-    return Dialog(
-      backgroundColor: Colors.transparent,
-      insetPadding: EdgeInsets.zero,
-      child: Container(
-        width: MediaQuery.of(context).size.width,
-        height: MediaQuery.of(context).size.height,
-        color: Colors.white,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        // Deshabilitar el botón de back durante orden asignada
+        if (didPop) return;
+      },
+      child: Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: EdgeInsets.zero,
+        child: Container(
+          width: MediaQuery.of(context).size.width,
+          height: MediaQuery.of(context).size.height,
+          color: Colors.white,
         child: Stack(
           children: [
             // Mapa con los tres marcadores
@@ -251,6 +305,7 @@ class _OrderAssignedDialogState extends ConsumerState<OrderAssignedDialog> {
             ),
           ],
         ),
+      ),
       ),
     );
   }

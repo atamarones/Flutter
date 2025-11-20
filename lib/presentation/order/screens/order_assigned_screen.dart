@@ -11,8 +11,14 @@ class OrderAssignedScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    return Scaffold(
-      body: SafeArea(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        // Deshabilitar el botón de back durante orden asignada
+        if (didPop) return;
+      },
+      child: Scaffold(
+        body: SafeArea(
         child: Column(
           children: [
             Container(
@@ -60,7 +66,7 @@ class OrderAssignedScreen extends ConsumerWidget {
                     _InfoRow(
                       icon: Icons.attach_money,
                       label: 'Total',
-                      value: '\$${order.totalAmount.toStringAsFixed(2)}',
+                      value: '\$${order.totalAmount}',
                     ),
                     if (order.estimatedDistanceKm != null) ...[
                       const SizedBox(height: 16),
@@ -91,6 +97,7 @@ class OrderAssignedScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
       ),
     );
   }

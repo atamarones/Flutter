@@ -81,7 +81,7 @@ class _OrderCard extends StatelessWidget {
                   Text('${order.items.length} items'),
                   const SizedBox(width: 16),
                   const Icon(Icons.attach_money, size: 16, color: AppColors.textSecondary),
-                  Text('\$${order.totalAmount.toStringAsFixed(2)}'),
+                  Text('\$${order.totalAmount}'),
                 ],
               ),
               const SizedBox(height: 8),

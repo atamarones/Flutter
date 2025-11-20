@@ -38,6 +38,7 @@ class _OrderContent extends ConsumerStatefulWidget {
 
 class _OrderContentState extends ConsumerState<_OrderContent> {
   bool _isNearPickup = false;
+  bool _isNearDelivery = false;
 
   @override
   void initState() {
@@ -49,8 +50,8 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
     final position = await ref.read(locationServiceProvider).getCurrentPosition();
     if (position == null) return;
 
-    // Solo validar cercanía al PICKUP cuando está accepted
     if (widget.order.status == OrderStatus.accepted) {
+      // Validar cercanía al PICKUP cuando está accepted
       final distance = Geolocator.distanceBetween(
         position.latitude,
         position.longitude,
@@ -58,7 +59,18 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
         widget.order.pickupLng,
       );
       if (mounted) {
-        setState(() => _isNearPickup = distance <= 50);
+        setState(() => _isNearPickup = distance <= AppConstants.deliveryRadiusMeters);
+      }
+    } else if (widget.order.status == OrderStatus.inProgress) {
+      // Validar cercanía al DELIVERY cuando está in_progress
+      final distance = Geolocator.distanceBetween(
+        position.latitude,
+        position.longitude,
+        widget.order.deliveryLat,
+        widget.order.deliveryLng,
+      );
+      if (mounted) {
+        setState(() => _isNearDelivery = distance <= AppConstants.deliveryRadiusMeters);
       }
     }
   }
@@ -403,6 +415,44 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
             ),
           ],
         ),
+        if (widget.order.estimatedDistanceKm != null) ...[
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.route, size: 16, color: AppColors.primary),
+                const SizedBox(width: 6),
+                Text(
+                  '${widget.order.estimatedDistanceKm!.toStringAsFixed(1)} km',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (widget.order.estimatedDurationMin != null) ...[
+                  const SizedBox(width: 12),
+                  const Icon(Icons.access_time, size: 16, color: AppColors.textSecondary),
+                  const SizedBox(width: 4),
+                  Text(
+                    '~${widget.order.estimatedDurationMin} min',
+                    style: const TextStyle(
+                      fontSize: 13,
+                      color: AppColors.textSecondary,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
         const SizedBox(height: 12),
         InkWell(
           onTap: _callCustomer,
@@ -498,7 +548,7 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
                     ),
                   ),
                   Text(
-                    '\$${(item.price * item.quantity).toStringAsFixed(0)}',
+                    '\$${item.price * item.quantity}',
                     style: const TextStyle(
                       fontSize: 14,
                       fontWeight: FontWeight.w600,
@@ -519,7 +569,7 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
               ),
             ),
             Text(
-              '\$${widget.order.totalAmount.toStringAsFixed(0)}',
+              '\$${widget.order.totalAmount}',
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.bold,
@@ -563,19 +613,20 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
       width: double.infinity,
       height: 56,
       child: ElevatedButton(
-        onPressed: () => _deliverOrder(context),
+        onPressed: _isNearDelivery ? () => _deliverOrder(context) : null,
         style: ElevatedButton.styleFrom(
           backgroundColor: const Color(0xFF2D7A6E),
+          disabledBackgroundColor: Colors.grey[300],
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(12),
           ),
         ),
-        child: const Text(
-          'ENTREGAR PEDIDO',
+        child: Text(
+          _isNearDelivery ? 'ENTREGAR PEDIDO' : 'Ac\u00e9rcate al punto de entrega',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Colors.white,
+            color: _isNearDelivery ? Colors.white : Colors.grey[600],
           ),
         ),
       ),
@@ -591,7 +642,7 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
       final lng = isGoingToPickup ? widget.order.pickupLng : widget.order.deliveryLng;
 
       // Primero intentar con URL de app nativa, luego fallback a web
-      Uri? appUrl;
+      Uri appUrl;
       Uri webUrl;
 
       switch (settings.navigationMethod) {
@@ -611,7 +662,7 @@ class _OrderContentState extends ConsumerState<_OrderContent> {
 
       // Intentar abrir app nativa primero
       bool launched = false;
-      if (appUrl != null && await canLaunchUrl(appUrl)) {
+      if (await canLaunchUrl(appUrl)) {
         launched = await launchUrl(appUrl, mode: LaunchMode.externalApplication);
       }
 

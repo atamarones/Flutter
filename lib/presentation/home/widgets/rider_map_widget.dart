@@ -247,12 +247,25 @@ class _RiderMapWidgetState extends ConsumerState<RiderMapWidget> {
   Future<void> _updateMarkers() async {
     if (_mapboxMap == null || _annotationManager == null) return;
 
-    // Limpiar marcadores existentes
-    if (_riderMarker != null) {
-      await _annotationManager!.delete(_riderMarker!);
+    // Limpiar marcadores existentes de forma segura
+    try {
+      if (_riderMarker != null) {
+        await _annotationManager!.delete(_riderMarker!);
+        _riderMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting rider marker: $e');
+      _riderMarker = null;
     }
-    if (_pickupMarker != null) {
-      await _annotationManager!.delete(_pickupMarker!);
+
+    try {
+      if (_pickupMarker != null) {
+        await _annotationManager!.delete(_pickupMarker!);
+        _pickupMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting pickup marker: $e');
+      _pickupMarker = null;
     }
 
     // Recrear marcadores

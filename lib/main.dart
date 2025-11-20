@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:mapbox_maps_flutter/mapbox_maps_flutter.dart';
 import 'core/services/supabase_service.dart';
 import 'core/services/foreground_tracking_service.dart';
+import 'core/services/remote_config_service.dart';
 import 'core/constants/app_constants.dart';
 import 'core/theme/app_theme.dart';
 import 'routing/app_router.dart';
@@ -24,6 +25,9 @@ void main() async {
 
   // Inicializar Foreground Tracking Service
   await ForegroundTrackingService.initialize();
+
+  // Inicializar Remote Config (carga configuración desde servidor)
+  await RemoteConfigService.instance.initialize();
 
   runApp(
     const ProviderScope(

@@ -1,4 +1,4 @@
-import 'dart:typed_data';
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -84,32 +84,51 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
     if (_mapboxMap == null || _iconsRegistered) return;
 
     try {
-      // Cargar iconos desde assets
+      // Cargar iconos desde assets como ByteData
       final riderBytes = await rootBundle.load('assets/icons/rider_marker.png');
       final pickupBytes = await rootBundle.load('assets/icons/pickup_marker.png');
       final deliveryBytes = await rootBundle.load('assets/icons/delivery_marker.png');
 
-      final riderImage = MbxImage(
-        width: 96,
-        height: 96,
-        data: riderBytes.buffer.asUint8List(),
+      // Decodificar imágenes para obtener dimensiones reales
+      final riderCodec = await instantiateImageCodec(riderBytes.buffer.asUint8List());
+      final riderFrame = await riderCodec.getNextFrame();
+      final riderImage = riderFrame.image;
+
+      final pickupCodec = await instantiateImageCodec(pickupBytes.buffer.asUint8List());
+      final pickupFrame = await pickupCodec.getNextFrame();
+      final pickupImage = pickupFrame.image;
+
+      final deliveryCodec = await instantiateImageCodec(deliveryBytes.buffer.asUint8List());
+      final deliveryFrame = await deliveryCodec.getNextFrame();
+      final deliveryImage = deliveryFrame.image;
+
+      // Convertir a bytes en formato correcto
+      final riderData = await riderImage.toByteData(format: ImageByteFormat.png);
+      final pickupData = await pickupImage.toByteData(format: ImageByteFormat.png);
+      final deliveryData = await deliveryImage.toByteData(format: ImageByteFormat.png);
+
+      // Crear MbxImage con dimensiones reales
+      final riderMbx = MbxImage(
+        width: riderImage.width,
+        height: riderImage.height,
+        data: riderData!.buffer.asUint8List(),
       );
-      final pickupImage = MbxImage(
-        width: 96,
-        height: 96,
-        data: pickupBytes.buffer.asUint8List(),
+      final pickupMbx = MbxImage(
+        width: pickupImage.width,
+        height: pickupImage.height,
+        data: pickupData!.buffer.asUint8List(),
       );
-      final deliveryImage = MbxImage(
-        width: 96,
-        height: 96,
-        data: deliveryBytes.buffer.asUint8List(),
+      final deliveryMbx = MbxImage(
+        width: deliveryImage.width,
+        height: deliveryImage.height,
+        data: deliveryData!.buffer.asUint8List(),
       );
 
       // Registrar iconos en el mapa
       await _mapboxMap!.style.addStyleImage(
         _riderIconId,
         1.0,
-        riderImage,
+        riderMbx,
         false,
         [],
         [],
@@ -118,7 +137,7 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
       await _mapboxMap!.style.addStyleImage(
         _pickupIconId,
         1.0,
-        pickupImage,
+        pickupMbx,
         false,
         [],
         [],
@@ -127,7 +146,7 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
       await _mapboxMap!.style.addStyleImage(
         _deliveryIconId,
         1.0,
-        deliveryImage,
+        deliveryMbx,
         false,
         [],
         [],
@@ -143,17 +162,34 @@ class _OrderMapWidgetState extends ConsumerState<OrderMapWidget> {
   Future<void> _updateMarkers() async {
     if (_mapboxMap == null || _annotationManager == null) return;
 
-    // Limpiar marcadores existentes
-    if (_riderMarker != null) {
-      await _annotationManager!.delete(_riderMarker!);
+    // Limpiar marcadores existentes de forma segura
+    try {
+      if (_riderMarker != null) {
+        await _annotationManager!.delete(_riderMarker!);
+        _riderMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting rider marker: $e');
       _riderMarker = null;
     }
-    if (_pickupMarker != null) {
-      await _annotationManager!.delete(_pickupMarker!);
+
+    try {
+      if (_pickupMarker != null) {
+        await _annotationManager!.delete(_pickupMarker!);
+        _pickupMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting pickup marker: $e');
       _pickupMarker = null;
     }
-    if (_deliveryMarker != null) {
-      await _annotationManager!.delete(_deliveryMarker!);
+
+    try {
+      if (_deliveryMarker != null) {
+        await _annotationManager!.delete(_deliveryMarker!);
+        _deliveryMarker = null;
+      }
+    } catch (e) {
+      debugPrint('Error deleting delivery marker: $e');
       _deliveryMarker = null;
     }
 
